@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: aion_postgres
+
+    environment:
+      POSTGRES_USER: aion
+      POSTGRES_PASSWORD: aion_password
+      POSTGRES_DB: aion_db
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: aion_redis
+
+    ports:
+      - "6379:6379"
+
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
