@@ -38,3 +38,17 @@ class MarketPriceRepository:
         )
 
         return self.db.scalar(statement)
+
+    def list_by_asset_id(
+        self,
+        asset_id: int,
+        limit: int = 100,
+    ) -> list[MarketPrice]:
+        statement = (
+            select(MarketPrice)
+            .where(MarketPrice.asset_id == asset_id)
+            .order_by(MarketPrice.timestamp.desc())
+            .limit(limit)
+        )
+
+        return list(self.db.scalars(statement).all())

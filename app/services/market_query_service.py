@@ -35,3 +35,38 @@ class MarketQueryService:
             )
 
         return latest_price
+
+    def get_price_history(
+        self,
+        symbol: str,
+        limit: int = 100,
+    ) -> list[MarketPrice]:
+        clean_symbol = symbol.strip().upper()
+
+        if not clean_symbol:
+            raise ValueError("Symbol cannot be empty.")
+
+        if limit < 1:
+            raise ValueError("Limit must be greater than zero.")
+
+        if limit > 1000:
+            raise ValueError("Limit cannot be greater than 1000.")
+
+        asset = self.asset_repository.get_by_symbol(clean_symbol)
+
+        if asset is None:
+            raise ValueError(
+                f"Asset not found in database: {clean_symbol}"
+            )
+
+        prices = self.market_price_repository.list_by_asset_id(
+            asset_id=asset.id,
+            limit=limit,
+        )
+
+        if not prices:
+            raise ValueError(
+                f"Market price history not found for asset: {clean_symbol}"
+            )
+
+        return prices

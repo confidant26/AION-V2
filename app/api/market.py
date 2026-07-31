@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_db
@@ -76,6 +76,60 @@ def get_latest_market_price(
             "volume": latest_price.volume,
             "timestamp": latest_price.timestamp,
             "created_at": latest_price.created_at,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get("/history/{symbol}")
+def get_market_price_history(
+    symbol: str,
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Maximum number of market price records to return.",
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    asset_repository = AssetRepository(db)
+    market_price_repository = MarketPriceRepository(db)
+
+    service = MarketQueryService(
+        asset_repository=asset_repository,
+        market_price_repository=market_price_repository,
+    )
+
+    try:
+        prices = service.get_price_history(
+            symbol=symbol,
+            limit=limit,
+        )
+
+        clean_symbol = symbol.strip().upper()
+
+        return {
+            "symbol": clean_symbol,
+            "count": len(prices),
+            "limit": limit,
+            "prices": [
+                {
+                    "id": price.id,
+                    "asset_id": price.asset_id,
+                    "open": price.open_price,
+                    "high": price.high_price,
+                    "low": price.low_price,
+                    "close": price.close_price,
+                    "volume": price.volume,
+                    "timestamp": price.timestamp,
+                    "created_at": price.created_at,
+                }
+                for price in prices
+            ],
         }
 
     except ValueError as exc:
