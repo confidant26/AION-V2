@@ -3,7 +3,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.assets import router as assets_router
+from app.api.balance_sheet import router as balance_sheet_router
 from app.api.company import router as company_router
+from app.api.income_statement import (
+    router as income_statement_router,
+)
 from app.api.market import router as market_router
 from app.core.config import settings
 from app.db.session import engine
@@ -19,6 +23,8 @@ app = FastAPI(
 app.include_router(assets_router)
 app.include_router(market_router)
 app.include_router(company_router)
+app.include_router(income_statement_router)
+app.include_router(balance_sheet_router)
 
 
 @app.get("/")

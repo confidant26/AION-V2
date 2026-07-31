@@ -100,3 +100,21 @@ class Asset(Base):
         back_populates="asset",
         cascade="all, delete-orphan",
     )
+
+    income_statements = relationship(
+        "IncomeStatement",
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+
+    balance_sheets = relationship(
+        "BalanceSheet",
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+
+    company_profiles = relationship(
+        "CompanyProfile",
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
