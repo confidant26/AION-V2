@@ -8,6 +8,7 @@ from app.api.cash_flow_statement import (
     router as cash_flow_statement_router,
 )
 from app.api.company import router as company_router
+from app.api.financial_metrics import router as financial_metrics_router
 from app.api.income_statement import (
     router as income_statement_router,
 )
@@ -29,6 +30,7 @@ app.include_router(company_router)
 app.include_router(income_statement_router)
 app.include_router(balance_sheet_router)
 app.include_router(cash_flow_statement_router)
+app.include_router(financial_metrics_router)
 
 
 @app.get("/")
