@@ -113,6 +113,12 @@ class Asset(Base):
         cascade="all, delete-orphan",
     )
 
+    cash_flow_statements = relationship(
+        "CashFlowStatement",
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+
     company_profiles = relationship(
         "CompanyProfile",
         back_populates="asset",
