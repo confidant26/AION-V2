@@ -357,3 +357,60 @@ def test_composite_score_uses_expected_weights():
 
     assert result.component_date_spread_days == 182
     assert result.period_alignment_ok is True
+
+def test_composite_score_flags_misaligned_component_dates():
+    service = object.__new__(
+        CompositeScoreService
+    )
+
+    service.asset_repository = FakeAssetRepository()
+
+    service.growth_score_service = (
+        FakeGrowthScoreService()
+    )
+
+    service.quality_score_service = (
+        FakeQualityScoreService()
+    )
+
+    class FarFutureValuationScoreService:
+        def get_valuation_score(
+            self,
+            symbol: str,
+        ):
+            return SimpleNamespace(
+                symbol=symbol,
+                valuation_score=Decimal("0.40"),
+                confidence=Decimal("1"),
+                period_end_date=date(2027, 3, 31),
+                currency="USD",
+            )
+
+    service.valuation_score_service = (
+        FarFutureValuationScoreService()
+    )
+
+    result = service.get_composite_score(
+        symbol="AAPL",
+    )
+
+    assert result.oldest_component_date == date(
+        2025,
+        9,
+        30,
+    )
+
+    assert result.newest_component_date == date(
+        2027,
+        3,
+        31,
+    )
+
+    assert result.component_date_spread_days == 547
+
+    assert result.component_date_spread_days > (
+        CompositeScoreService
+        .MAX_COMPONENT_DATE_SPREAD_DAYS
+    )
+
+    assert result.period_alignment_ok is False
