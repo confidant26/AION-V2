@@ -21,6 +21,7 @@ from app.api.ttm_valuation_metrics import (
     router as ttm_valuation_metrics_router,
 )
 from app.api.valuation_metrics import router as valuation_metrics_router
+from app.api.valuation_score import router as valuation_score_router
 from app.core.config import settings
 from app.db.session import engine
 
@@ -45,6 +46,7 @@ app.include_router(quality_score_router)
 app.include_router(valuation_metrics_router)
 app.include_router(ttm_financials_router)
 app.include_router(ttm_valuation_metrics_router)
+app.include_router(valuation_score_router)
 
 
 @app.get("/")
