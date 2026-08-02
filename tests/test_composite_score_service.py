@@ -299,3 +299,61 @@ def test_composite_score_fails_when_all_components_are_missing():
         service.get_composite_score(
             symbol="AAPL",
         )
+
+def test_composite_score_uses_expected_weights():
+    service = object.__new__(
+        CompositeScoreService
+    )
+
+    service.asset_repository = FakeAssetRepository()
+    service.growth_score_service = (
+        FakeGrowthScoreService()
+    )
+    service.quality_score_service = (
+        FakeQualityScoreService()
+    )
+    service.valuation_score_service = (
+        FakeValuationScoreService()
+    )
+
+    result = service.get_composite_score(
+        symbol="AAPL",
+    )
+
+    expected_composite_score = (
+        Decimal("0.60") * Decimal("0.35")
+        + Decimal("0.80") * Decimal("0.35")
+        + Decimal("0.40") * Decimal("0.30")
+    )
+
+    assert result.symbol == "AAPL"
+
+    assert result.growth_score == Decimal("0.60")
+    assert result.quality_score == Decimal("0.80")
+    assert result.valuation_score == Decimal("0.40")
+
+    assert result.growth_weight == Decimal("0.35")
+    assert result.quality_weight == Decimal("0.35")
+    assert result.valuation_weight == Decimal("0.30")
+
+    assert result.composite_score == (
+        expected_composite_score
+    )
+
+    assert result.missing_components == []
+    assert result.confidence == Decimal("1.00")
+
+    assert result.oldest_component_date == date(
+        2025,
+        9,
+        30,
+    )
+
+    assert result.newest_component_date == date(
+        2026,
+        3,
+        31,
+    )
+
+    assert result.component_date_spread_days == 182
+    assert result.period_alignment_ok is True
