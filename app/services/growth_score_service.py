@@ -9,6 +9,8 @@ from app.services.growth_metrics_service import (
 
 
 class GrowthScoreService:
+    SCORE_COMPONENT_COUNT = 6
+
     def __init__(
         self,
         db: Session,
@@ -71,6 +73,22 @@ class GrowthScoreService:
                     total_assets_growth_score,
                     stockholders_equity_growth_score,
                 ]
+            )
+
+            score_coverage = self._calculate_score_coverage(
+                [
+                    revenue_growth_score,
+                    operating_income_growth_score,
+                    net_income_growth_score,
+                    free_cash_flow_growth_score,
+                    total_assets_growth_score,
+                    stockholders_equity_growth_score,
+                ]
+            )
+
+            confidence = min(
+                metrics.confidence,
+                score_coverage,
             )
 
             results.append(
@@ -138,11 +156,26 @@ class GrowthScoreService:
                     missing_fields=list(
                         metrics.missing_fields
                     ),
-                    confidence=metrics.confidence,
+                    confidence=confidence,
                 )
             )
 
         return results
+
+    def _calculate_score_coverage(
+        self,
+        scores: list[Decimal | None],
+    ) -> Decimal:
+        available_count = sum(
+            1
+            for score in scores
+            if score is not None
+        )
+
+        return (
+            Decimal(available_count)
+            / Decimal(self.SCORE_COMPONENT_COUNT)
+        )
 
     @staticmethod
     def _score_growth(

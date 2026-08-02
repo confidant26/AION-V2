@@ -9,6 +9,8 @@ from app.services.ttm_valuation_metrics_service import (
 
 
 class ValuationScoreService:
+    SCORE_COMPONENT_COUNT = 2
+
     def __init__(
         self,
         db: Session,
@@ -45,6 +47,18 @@ class ValuationScoreService:
                 earnings_yield_score,
                 free_cash_flow_yield_score,
             ]
+        )
+
+        score_coverage = self._calculate_score_coverage(
+            [
+                earnings_yield_score,
+                free_cash_flow_yield_score,
+            ]
+        )
+
+        confidence = min(
+            valuation_metrics.confidence,
+            score_coverage,
         )
 
         return ValuationScoreResponse(
@@ -99,7 +113,22 @@ class ValuationScoreService:
             missing_fields=list(
                 valuation_metrics.missing_fields
             ),
-            confidence=valuation_metrics.confidence,
+            confidence=confidence,
+        )
+
+    def _calculate_score_coverage(
+        self,
+        scores: list[Decimal | None],
+    ) -> Decimal:
+        available_count = sum(
+            1
+            for score in scores
+            if score is not None
+        )
+
+        return (
+            Decimal(available_count)
+            / Decimal(self.SCORE_COMPONENT_COUNT)
         )
 
     @staticmethod

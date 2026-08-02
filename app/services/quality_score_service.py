@@ -9,6 +9,8 @@ from app.services.financial_metrics_service import (
 
 
 class QualityScoreService:
+    SCORE_COMPONENT_COUNT = 7
+
     def __init__(
         self,
         db: Session,
@@ -33,39 +35,65 @@ class QualityScoreService:
         results: list[QualityScoreResponse] = []
 
         for metrics in financial_metrics:
+            operating_margin_score = (
+                self._score_operating_margin(
+                    metrics.operating_margin
+                )
+            )
+
+            net_margin_score = self._score_net_margin(
+                metrics.net_margin
+            )
+
+            return_on_assets_score = (
+                self._score_return_on_assets(
+                    metrics.return_on_assets
+                )
+            )
+
+            return_on_equity_score = (
+                self._score_return_on_equity(
+                    metrics.return_on_equity
+                )
+            )
+
+            current_ratio_score = (
+                self._score_current_ratio(
+                    metrics.current_ratio
+                )
+            )
+
+            debt_to_equity_score = (
+                self._score_debt_to_equity(
+                    metrics.debt_to_equity
+                )
+            )
+
+            free_cash_flow_margin_score = (
+                self._score_free_cash_flow_margin(
+                    metrics.free_cash_flow_margin
+                )
+            )
+
             profitability_score = self._average_scores(
                 [
-                    self._score_operating_margin(
-                        metrics.operating_margin
-                    ),
-                    self._score_net_margin(
-                        metrics.net_margin
-                    ),
-                    self._score_return_on_assets(
-                        metrics.return_on_assets
-                    ),
-                    self._score_return_on_equity(
-                        metrics.return_on_equity
-                    ),
+                    operating_margin_score,
+                    net_margin_score,
+                    return_on_assets_score,
+                    return_on_equity_score,
                 ]
             )
 
             balance_sheet_score = self._average_scores(
                 [
-                    self._score_current_ratio(
-                        metrics.current_ratio
-                    ),
-                    self._score_debt_to_equity(
-                        metrics.debt_to_equity
-                    ),
+                    current_ratio_score,
+                    debt_to_equity_score,
                 ]
             )
 
             cash_flow_score = self._average_scores(
                 [
-                    self._score_free_cash_flow_margin(
-                        metrics.free_cash_flow_margin
-                    ),
+                    free_cash_flow_margin_score,
                 ]
             )
 
@@ -75,6 +103,23 @@ class QualityScoreService:
                     balance_sheet_score,
                     cash_flow_score,
                 ]
+            )
+
+            score_coverage = self._calculate_score_coverage(
+                [
+                    operating_margin_score,
+                    net_margin_score,
+                    return_on_assets_score,
+                    return_on_equity_score,
+                    current_ratio_score,
+                    debt_to_equity_score,
+                    free_cash_flow_margin_score,
+                ]
+            )
+
+            confidence = min(
+                metrics.confidence,
+                score_coverage,
             )
 
             results.append(
@@ -108,11 +153,26 @@ class QualityScoreService:
                     missing_fields=list(
                         metrics.missing_fields
                     ),
-                    confidence=metrics.confidence,
+                    confidence=confidence,
                 )
             )
 
         return results
+
+    def _calculate_score_coverage(
+        self,
+        scores: list[Decimal | None],
+    ) -> Decimal:
+        available_count = sum(
+            1
+            for score in scores
+            if score is not None
+        )
+
+        return (
+            Decimal(available_count)
+            / Decimal(self.SCORE_COMPONENT_COUNT)
+        )
 
     @staticmethod
     def _average_scores(

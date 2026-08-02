@@ -25,6 +25,11 @@ class CompositeScoreResponse(BaseModel):
     quality_period_end_date: date | None = None
     valuation_period_end_date: date | None = None
 
+    oldest_component_date: date | None = None
+    newest_component_date: date | None = None
+    component_date_spread_days: int | None = None
+    period_alignment_ok: bool
+
     missing_components: list[str] = Field(
         default_factory=list,
     )

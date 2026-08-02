@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.repositories.asset_repository import AssetRepository
 from app.schemas.composite_score import CompositeScoreResponse
 from app.services.growth_score_service import (
     GrowthScoreService,
@@ -20,10 +21,13 @@ class CompositeScoreService:
     QUALITY_WEIGHT = Decimal("0.35")
     VALUATION_WEIGHT = Decimal("0.30")
 
+    MAX_COMPONENT_DATE_SPREAD_DAYS = 430
+
     def __init__(
         self,
         db: Session,
     ):
+        self.asset_repository = AssetRepository(db)
         self.growth_score_service = GrowthScoreService(db)
         self.quality_score_service = QualityScoreService(db)
         self.valuation_score_service = ValuationScoreService(db)
@@ -34,36 +38,25 @@ class CompositeScoreService:
     ) -> CompositeScoreResponse:
         clean_symbol = symbol.strip().upper()
 
-        growth_results = (
-            self.growth_score_service.get_growth_scores(
-                symbol=clean_symbol,
-                limit=1,
+        asset = self.asset_repository.get_by_symbol(
+            clean_symbol
+        )
+
+        if asset is None:
+            raise ValueError(
+                f"Asset not found for symbol: {clean_symbol}"
             )
+
+        growth_result = self._get_growth_result(
+            symbol=clean_symbol,
         )
 
-        quality_results = (
-            self.quality_score_service.get_quality_scores(
-                symbol=clean_symbol,
-                limit=1,
-            )
+        quality_result = self._get_quality_result(
+            symbol=clean_symbol,
         )
 
-        valuation_result = (
-            self.valuation_score_service.get_valuation_score(
-                symbol=clean_symbol,
-            )
-        )
-
-        growth_result = (
-            growth_results[0]
-            if growth_results
-            else None
-        )
-
-        quality_result = (
-            quality_results[0]
-            if quality_results
-            else None
+        valuation_result = self._get_valuation_result(
+            symbol=clean_symbol,
         )
 
         growth_score = (
@@ -78,7 +71,11 @@ class CompositeScoreService:
             else None
         )
 
-        valuation_score = valuation_result.valuation_score
+        valuation_score = (
+            valuation_result.valuation_score
+            if valuation_result is not None
+            else None
+        )
 
         missing_components: list[str] = []
 
@@ -110,41 +107,52 @@ class CompositeScoreService:
             ),
             valuation_confidence=(
                 valuation_result.confidence
+                if valuation_result is not None
+                else Decimal("0")
             ),
         )
 
-        as_of_date = self._latest_date(
-            growth_date=(
-                growth_result.period_end_date
-                if growth_result is not None
-                else None
-            ),
-            quality_date=(
-                quality_result.period_end_date
-                if quality_result is not None
-                else None
-            ),
-            valuation_date=(
-                valuation_result.period_end_date
-            ),
+        growth_date = (
+            growth_result.period_end_date
+            if growth_result is not None
+            else None
+        )
+
+        quality_date = (
+            quality_result.period_end_date
+            if quality_result is not None
+            else None
+        )
+
+        valuation_date = (
+            valuation_result.period_end_date
+            if valuation_result is not None
+            else None
+        )
+
+        (
+            oldest_component_date,
+            newest_component_date,
+            component_date_spread_days,
+            period_alignment_ok,
+        ) = self._calculate_period_alignment(
+            growth_date=growth_date,
+            quality_date=quality_date,
+            valuation_date=valuation_date,
+        )
+
+        as_of_date = newest_component_date
+
+        currency = self._resolve_currency(
+            growth_result=growth_result,
+            quality_result=quality_result,
+            valuation_result=valuation_result,
         )
 
         return CompositeScoreResponse(
             symbol=clean_symbol,
             as_of_date=as_of_date,
-            currency=(
-                valuation_result.currency
-                or (
-                    quality_result.currency
-                    if quality_result is not None
-                    else None
-                )
-                or (
-                    growth_result.currency
-                    if growth_result is not None
-                    else None
-                )
-            ),
+            currency=currency,
             growth_score=growth_score,
             quality_score=quality_score,
             valuation_score=valuation_score,
@@ -152,22 +160,72 @@ class CompositeScoreService:
             growth_weight=self.GROWTH_WEIGHT,
             quality_weight=self.QUALITY_WEIGHT,
             valuation_weight=self.VALUATION_WEIGHT,
-            growth_period_end_date=(
-                growth_result.period_end_date
-                if growth_result is not None
-                else None
+            growth_period_end_date=growth_date,
+            quality_period_end_date=quality_date,
+            valuation_period_end_date=valuation_date,
+            oldest_component_date=oldest_component_date,
+            newest_component_date=newest_component_date,
+            component_date_spread_days=(
+                component_date_spread_days
             ),
-            quality_period_end_date=(
-                quality_result.period_end_date
-                if quality_result is not None
-                else None
-            ),
-            valuation_period_end_date=(
-                valuation_result.period_end_date
-            ),
+            period_alignment_ok=period_alignment_ok,
             missing_components=missing_components,
             confidence=confidence,
         )
+
+    def _get_growth_result(
+        self,
+        *,
+        symbol: str,
+    ):
+        try:
+            results = (
+                self.growth_score_service.get_growth_scores(
+                    symbol=symbol,
+                    limit=1,
+                )
+            )
+        except ValueError:
+            return None
+
+        if not results:
+            return None
+
+        return results[0]
+
+    def _get_quality_result(
+        self,
+        *,
+        symbol: str,
+    ):
+        try:
+            results = (
+                self.quality_score_service.get_quality_scores(
+                    symbol=symbol,
+                    limit=1,
+                )
+            )
+        except ValueError:
+            return None
+
+        if not results:
+            return None
+
+        return results[0]
+
+    def _get_valuation_result(
+        self,
+        *,
+        symbol: str,
+    ):
+        try:
+            return (
+                self.valuation_score_service.get_valuation_score(
+                    symbol=symbol,
+                )
+            )
+        except ValueError:
+            return None
 
     def _weighted_score(
         self,
@@ -229,13 +287,18 @@ class CompositeScoreService:
 
         return weighted_confidence
 
-    @staticmethod
-    def _latest_date(
+    def _calculate_period_alignment(
+        self,
         *,
         growth_date: date | None,
         quality_date: date | None,
         valuation_date: date | None,
-    ) -> date:
+    ) -> tuple[
+        date,
+        date,
+        int,
+        bool,
+    ]:
         available_dates = [
             value
             for value in (
@@ -248,7 +311,52 @@ class CompositeScoreService:
 
         if not available_dates:
             raise ValueError(
-                "Composite score date could not be determined."
+                "Composite score could not be calculated because "
+                "no scoring components are available."
             )
 
-        return max(available_dates)
+        oldest_date = min(available_dates)
+        newest_date = max(available_dates)
+
+        spread_days = (
+            newest_date - oldest_date
+        ).days
+
+        alignment_ok = (
+            spread_days
+            <= self.MAX_COMPONENT_DATE_SPREAD_DAYS
+        )
+
+        return (
+            oldest_date,
+            newest_date,
+            spread_days,
+            alignment_ok,
+        )
+
+    @staticmethod
+    def _resolve_currency(
+        *,
+        growth_result,
+        quality_result,
+        valuation_result,
+    ) -> str | None:
+        if (
+            valuation_result is not None
+            and valuation_result.currency is not None
+        ):
+            return valuation_result.currency
+
+        if (
+            quality_result is not None
+            and quality_result.currency is not None
+        ):
+            return quality_result.currency
+
+        if (
+            growth_result is not None
+            and growth_result.currency is not None
+        ):
+            return growth_result.currency
+
+        return None
