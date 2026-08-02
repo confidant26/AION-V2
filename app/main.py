@@ -14,6 +14,7 @@ from app.api.income_statement import (
     router as income_statement_router,
 )
 from app.api.market import router as market_router
+from app.api.quality_score import router as quality_score_router
 from app.api.ttm_financials import router as ttm_financials_router
 from app.api.ttm_valuation_metrics import (
     router as ttm_valuation_metrics_router,
@@ -38,6 +39,7 @@ app.include_router(balance_sheet_router)
 app.include_router(cash_flow_statement_router)
 app.include_router(financial_metrics_router)
 app.include_router(growth_metrics_router)
+app.include_router(quality_score_router)
 app.include_router(valuation_metrics_router)
 app.include_router(ttm_financials_router)
 app.include_router(ttm_valuation_metrics_router)
