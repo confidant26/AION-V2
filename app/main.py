@@ -14,6 +14,9 @@ from app.api.income_statement import (
 )
 from app.api.market import router as market_router
 from app.api.ttm_financials import router as ttm_financials_router
+from app.api.ttm_valuation_metrics import (
+    router as ttm_valuation_metrics_router,
+)
 from app.api.valuation_metrics import router as valuation_metrics_router
 from app.core.config import settings
 from app.db.session import engine
@@ -35,6 +38,7 @@ app.include_router(cash_flow_statement_router)
 app.include_router(financial_metrics_router)
 app.include_router(valuation_metrics_router)
 app.include_router(ttm_financials_router)
+app.include_router(ttm_valuation_metrics_router)
 
 
 @app.get("/")
