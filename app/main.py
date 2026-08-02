@@ -8,6 +8,7 @@ from app.api.cash_flow_statement import (
     router as cash_flow_statement_router,
 )
 from app.api.company import router as company_router
+from app.api.composite_score import router as composite_score_router
 from app.api.financial_metrics import router as financial_metrics_router
 from app.api.growth_metrics import router as growth_metrics_router
 from app.api.growth_score import router as growth_score_router
@@ -47,6 +48,7 @@ app.include_router(valuation_metrics_router)
 app.include_router(ttm_financials_router)
 app.include_router(ttm_valuation_metrics_router)
 app.include_router(valuation_score_router)
+app.include_router(composite_score_router)
 
 
 @app.get("/")
