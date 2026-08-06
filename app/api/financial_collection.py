@@ -11,6 +11,10 @@ from app.services.cash_flow_statement_service import (
 )
 from app.services.composite_score_service import CompositeScoreService
 from app.services.income_statement_service import IncomeStatementService
+from app.services.ttm_financials_service import TTMFinancialsService
+from app.services.ttm_valuation_metrics_service import (
+    TTMValuationMetricsService,
+)
 
 
 router = APIRouter(
@@ -73,9 +77,7 @@ def _quarterly_alignment_ok(
     ):
         return False
 
-    return len(
-        set(dates)
-    ) == 1
+    return len(set(dates)) == 1
 
 
 def _build_data_quality_warnings(
@@ -120,14 +122,88 @@ def _build_data_quality_warnings(
     return warnings
 
 
+def _build_analysis(
+    *,
+    db: Session,
+    symbol: str,
+) -> dict:
+    warnings: list[str] = []
+
+    ttm_financials = None
+    ttm_valuation_metrics = None
+    composite_score = None
+
+    try:
+        result = TTMFinancialsService(
+            db=db,
+        ).get_ttm_financials(
+            symbol=symbol,
+        )
+
+        ttm_financials = result.model_dump(
+            mode="json"
+        )
+
+    except ValueError as exc:
+        warnings.append(
+            f"TTM financials unavailable: {exc}"
+        )
+
+    try:
+        result = TTMValuationMetricsService(
+            db=db,
+        ).get_ttm_valuation_metrics(
+            symbol=symbol,
+        )
+
+        ttm_valuation_metrics = result.model_dump(
+            mode="json"
+        )
+
+    except ValueError as exc:
+        warnings.append(
+            f"TTM valuation metrics unavailable: {exc}"
+        )
+
+    try:
+        result = CompositeScoreService(
+            db=db,
+        ).get_composite_score(
+            symbol=symbol,
+        )
+
+        composite_score = result.model_dump(
+            mode="json"
+        )
+
+    except ValueError as exc:
+        warnings.append(
+            f"Composite score unavailable: {exc}"
+        )
+
+    return {
+        "status": (
+            "healthy"
+            if not warnings
+            else "warning"
+        ),
+        "warnings": warnings,
+        "ttm_financials": ttm_financials,
+        "ttm_valuation_metrics": (
+            ttm_valuation_metrics
+        ),
+        "composite_score": composite_score,
+    }
+
+
 @router.post("/collect/{symbol}")
 async def collect_financials(
     symbol: str,
     include_analysis: bool = Query(
         default=False,
         description=(
-            "Include the latest composite analysis "
-            "after financial collection."
+            "Include TTM financials, TTM valuation metrics, "
+            "and composite score after collection."
         ),
     ),
     db: Session = Depends(get_db),
@@ -168,167 +244,150 @@ async def collect_financials(
             )
         )
 
-        latest_income_date = (
-            _latest_period_end_date(
-                income_statements
-            )
-        )
-
-        latest_balance_date = (
-            _latest_period_end_date(
-                balance_sheets
-            )
-        )
-
-        latest_cash_flow_date = (
-            _latest_period_end_date(
-                cash_flow_statements
-            )
-        )
-
-        latest_income_quarter = (
-            _latest_quarterly_period_end_date(
-                income_statements
-            )
-        )
-
-        latest_balance_quarter = (
-            _latest_quarterly_period_end_date(
-                balance_sheets
-            )
-        )
-
-        latest_cash_flow_quarter = (
-            _latest_quarterly_period_end_date(
-                cash_flow_statements
-            )
-        )
-
-        quarterly_dates = [
-            latest_income_quarter,
-            latest_balance_quarter,
-            latest_cash_flow_quarter,
-        ]
-
-        quarterly_alignment_ok = (
-            _quarterly_alignment_ok(
-                quarterly_dates
-            )
-        )
-
-        quarterly_spread_days = (
-            _calculate_date_spread_days(
-                quarterly_dates
-            )
-        )
-
-        warnings = (
-            _build_data_quality_warnings(
-                income_statements=(
-                    income_statements
-                ),
-                balance_sheets=(
-                    balance_sheets
-                ),
-                cash_flow_statements=(
-                    cash_flow_statements
-                ),
-                latest_income_quarter=(
-                    latest_income_quarter
-                ),
-                latest_balance_quarter=(
-                    latest_balance_quarter
-                ),
-                latest_cash_flow_quarter=(
-                    latest_cash_flow_quarter
-                ),
-            )
-        )
-
-        data_quality_status = (
-            "healthy"
-            if not warnings
-            else "warning"
-        )
-
-        response = {
-            "message": (
-                "Financial statements collected successfully."
-            ),
-            "symbol": clean_symbol,
-            "counts": {
-                "income_statements": len(
-                    income_statements
-                ),
-                "balance_sheets": len(
-                    balance_sheets
-                ),
-                "cash_flow_statements": len(
-                    cash_flow_statements
-                ),
-            },
-            "total_count": (
-                len(income_statements)
-                + len(balance_sheets)
-                + len(cash_flow_statements)
-            ),
-            "latest_periods": {
-                "income_statements": (
-                    latest_income_date
-                ),
-                "balance_sheets": (
-                    latest_balance_date
-                ),
-                "cash_flow_statements": (
-                    latest_cash_flow_date
-                ),
-            },
-            "latest_quarterly_periods": {
-                "income_statements": (
-                    latest_income_quarter
-                ),
-                "balance_sheets": (
-                    latest_balance_quarter
-                ),
-                "cash_flow_statements": (
-                    latest_cash_flow_quarter
-                ),
-            },
-            "quarterly_alignment": {
-                "ok": quarterly_alignment_ok,
-                "spread_days": (
-                    quarterly_spread_days
-                ),
-            },
-            "data_quality": {
-                "status": (
-                    data_quality_status
-                ),
-                "warnings": warnings,
-            },
-        }
-
-        if include_analysis:
-            composite_service = CompositeScoreService(
-                db=db,
-            )
-
-            composite_score = (
-                composite_service.get_composite_score(
-                    symbol=clean_symbol,
-                )
-            )
-
-            response["analysis"] = (
-                composite_score.model_dump(
-                    mode="json"
-                )
-            )
-
-        return response
-
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+    latest_income_date = (
+        _latest_period_end_date(
+            income_statements
+        )
+    )
+
+    latest_balance_date = (
+        _latest_period_end_date(
+            balance_sheets
+        )
+    )
+
+    latest_cash_flow_date = (
+        _latest_period_end_date(
+            cash_flow_statements
+        )
+    )
+
+    latest_income_quarter = (
+        _latest_quarterly_period_end_date(
+            income_statements
+        )
+    )
+
+    latest_balance_quarter = (
+        _latest_quarterly_period_end_date(
+            balance_sheets
+        )
+    )
+
+    latest_cash_flow_quarter = (
+        _latest_quarterly_period_end_date(
+            cash_flow_statements
+        )
+    )
+
+    quarterly_dates = [
+        latest_income_quarter,
+        latest_balance_quarter,
+        latest_cash_flow_quarter,
+    ]
+
+    quarterly_alignment_ok = (
+        _quarterly_alignment_ok(
+            quarterly_dates
+        )
+    )
+
+    quarterly_spread_days = (
+        _calculate_date_spread_days(
+            quarterly_dates
+        )
+    )
+
+    warnings = (
+        _build_data_quality_warnings(
+            income_statements=income_statements,
+            balance_sheets=balance_sheets,
+            cash_flow_statements=(
+                cash_flow_statements
+            ),
+            latest_income_quarter=(
+                latest_income_quarter
+            ),
+            latest_balance_quarter=(
+                latest_balance_quarter
+            ),
+            latest_cash_flow_quarter=(
+                latest_cash_flow_quarter
+            ),
+        )
+    )
+
+    response = {
+        "message": (
+            "Financial statements collected successfully."
+        ),
+        "symbol": clean_symbol,
+        "counts": {
+            "income_statements": len(
+                income_statements
+            ),
+            "balance_sheets": len(
+                balance_sheets
+            ),
+            "cash_flow_statements": len(
+                cash_flow_statements
+            ),
+        },
+        "total_count": (
+            len(income_statements)
+            + len(balance_sheets)
+            + len(cash_flow_statements)
+        ),
+        "latest_periods": {
+            "income_statements": (
+                latest_income_date
+            ),
+            "balance_sheets": (
+                latest_balance_date
+            ),
+            "cash_flow_statements": (
+                latest_cash_flow_date
+            ),
+        },
+        "latest_quarterly_periods": {
+            "income_statements": (
+                latest_income_quarter
+            ),
+            "balance_sheets": (
+                latest_balance_quarter
+            ),
+            "cash_flow_statements": (
+                latest_cash_flow_quarter
+            ),
+        },
+        "quarterly_alignment": {
+            "ok": quarterly_alignment_ok,
+            "spread_days": (
+                quarterly_spread_days
+            ),
+        },
+        "data_quality": {
+            "status": (
+                "healthy"
+                if not warnings
+                else "warning"
+            ),
+            "warnings": warnings,
+        },
+    }
+
+    if include_analysis:
+        response["analysis"] = (
+            _build_analysis(
+                db=db,
+                symbol=clean_symbol,
+            )
+        )
+
+    return response
