@@ -101,6 +101,33 @@ class FakeCashFlowStatementService:
         ]
 
 
+class FakeLaggingCashFlowStatementService:
+    def __init__(
+        self,
+        db,
+    ):
+        pass
+
+    async def collect_cash_flow_statements(
+        self,
+        symbol,
+    ):
+        return [
+            statement(
+                date(2026, 3, 31),
+                "quarterly",
+            ),
+            statement(
+                date(2025, 12, 31),
+                "quarterly",
+            ),
+            statement(
+                date(2025, 9, 30),
+                "annual",
+            ),
+        ]
+
+
 def test_financial_collection_endpoint_success(
     monkeypatch,
 ):
@@ -162,6 +189,59 @@ def test_financial_collection_endpoint_success(
     assert body["data_quality"] == {
         "status": "healthy",
         "warnings": [],
+    }
+
+
+def test_financial_collection_endpoint_warns_on_misalignment(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.api.financial_collection.IncomeStatementService",
+        FakeIncomeStatementService,
+    )
+
+    monkeypatch.setattr(
+        "app.api.financial_collection.BalanceSheetService",
+        FakeBalanceSheetService,
+    )
+
+    monkeypatch.setattr(
+        "app.api.financial_collection.CashFlowStatementService",
+        FakeLaggingCashFlowStatementService,
+    )
+
+    monkeypatch.setattr(
+        "app.api.financial_collection.get_financial_data_provider",
+        lambda: object(),
+    )
+
+    response = client.post(
+        "/financials/collect/aapl"
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["latest_quarterly_periods"] == {
+        "income_statements": "2026-06-30",
+        "balance_sheets": "2026-06-30",
+        "cash_flow_statements": "2026-03-31",
+    }
+
+    assert body["quarterly_alignment"] == {
+        "ok": False,
+        "spread_days": 91,
+    }
+
+    assert body["data_quality"] == {
+        "status": "warning",
+        "warnings": [
+            (
+                "Latest quarterly financial periods "
+                "are not aligned."
+            )
+        ],
     }
 
 
