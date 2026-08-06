@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_db
 from app.schemas.asset import AssetCreate, AssetResponse
+from app.services.asset_refresh_service import AssetRefreshService
 from app.services.asset_service import (
     AssetAlreadyExistsError,
     AssetNotFoundError,
@@ -28,7 +29,10 @@ def create_asset(
     service = AssetService(db)
 
     try:
-        return service.create_asset(asset_data)
+        return service.create_asset(
+            asset_data
+        )
+
     except AssetAlreadyExistsError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -41,9 +45,18 @@ def create_asset(
     response_model=list[AssetResponse],
 )
 def list_assets(
-    offset: int = Query(default=0, ge=0),
-    limit: int = Query(default=100, ge=1, le=500),
-    active_only: bool = Query(default=True),
+    offset: int = Query(
+        default=0,
+        ge=0,
+    ),
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=500,
+    ),
+    active_only: bool = Query(
+        default=True,
+    ),
     db: Session = Depends(get_db),
 ) -> list[AssetResponse]:
     service = AssetService(db)
@@ -53,6 +66,35 @@ def list_assets(
         limit=limit,
         active_only=active_only,
     )
+
+
+@router.post("/refresh/{symbol}")
+async def refresh_asset(
+    symbol: str,
+    include_analysis: bool = Query(
+        default=False,
+        description=(
+            "Include TTM financials, valuation metrics, "
+            "and composite score."
+        ),
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    service = AssetRefreshService(
+        db=db,
+    )
+
+    try:
+        return await service.refresh(
+            symbol=symbol,
+            include_analysis=include_analysis,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(
@@ -66,7 +108,10 @@ def get_asset(
     service = AssetService(db)
 
     try:
-        return service.get_asset(asset_id)
+        return service.get_asset(
+            asset_id
+        )
+
     except AssetNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
