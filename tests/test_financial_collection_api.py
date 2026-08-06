@@ -1,9 +1,22 @@
+from datetime import date
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
 from app.main import app
 
 
 client = TestClient(app)
+
+
+def statement(
+    period_end_date,
+    period_type,
+):
+    return SimpleNamespace(
+        period_end_date=period_end_date,
+        period_type=period_type,
+    )
 
 
 class FakeIncomeStatementService:
@@ -19,8 +32,14 @@ class FakeIncomeStatementService:
         symbol,
     ):
         return [
-            object(),
-            object(),
+            statement(
+                date(2026, 6, 30),
+                "quarterly",
+            ),
+            statement(
+                date(2025, 9, 30),
+                "annual",
+            ),
         ]
 
 
@@ -36,9 +55,18 @@ class FakeBalanceSheetService:
         symbol,
     ):
         return [
-            object(),
-            object(),
-            object(),
+            statement(
+                date(2026, 6, 30),
+                "quarterly",
+            ),
+            statement(
+                date(2026, 3, 31),
+                "quarterly",
+            ),
+            statement(
+                date(2025, 9, 30),
+                "annual",
+            ),
         ]
 
 
@@ -54,10 +82,22 @@ class FakeCashFlowStatementService:
         symbol,
     ):
         return [
-            object(),
-            object(),
-            object(),
-            object(),
+            statement(
+                date(2026, 6, 30),
+                "quarterly",
+            ),
+            statement(
+                date(2026, 3, 31),
+                "quarterly",
+            ),
+            statement(
+                date(2025, 12, 31),
+                "quarterly",
+            ),
+            statement(
+                date(2025, 9, 30),
+                "annual",
+            ),
         ]
 
 
@@ -101,6 +141,23 @@ def test_financial_collection_endpoint_success(
     }
 
     assert body["total_count"] == 9
+
+    assert body["latest_periods"] == {
+        "income_statements": "2026-06-30",
+        "balance_sheets": "2026-06-30",
+        "cash_flow_statements": "2026-06-30",
+    }
+
+    assert body["latest_quarterly_periods"] == {
+        "income_statements": "2026-06-30",
+        "balance_sheets": "2026-06-30",
+        "cash_flow_statements": "2026-06-30",
+    }
+
+    assert body["quarterly_alignment"] == {
+        "ok": True,
+        "spread_days": 0,
+    }
 
 
 class FakeIncomeStatementNotFoundService:

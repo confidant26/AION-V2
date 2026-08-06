@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -16,6 +18,65 @@ router = APIRouter(
 )
 
 
+def _latest_period_end_date(
+    statements: list,
+) -> date | None:
+    if not statements:
+        return None
+
+    return max(
+        statement.period_end_date
+        for statement in statements
+    )
+
+
+def _latest_quarterly_period_end_date(
+    statements: list,
+) -> date | None:
+    quarterly_dates = [
+        statement.period_end_date
+        for statement in statements
+        if statement.period_type == "quarterly"
+    ]
+
+    if not quarterly_dates:
+        return None
+
+    return max(quarterly_dates)
+
+
+def _calculate_date_spread_days(
+    dates: list[date | None],
+) -> int | None:
+    available_dates = [
+        value
+        for value in dates
+        if value is not None
+    ]
+
+    if not available_dates:
+        return None
+
+    return (
+        max(available_dates)
+        - min(available_dates)
+    ).days
+
+
+def _quarterly_alignment_ok(
+    dates: list[date | None],
+) -> bool:
+    if any(
+        value is None
+        for value in dates
+    ):
+        return False
+
+    return len(
+        set(dates)
+    ) == 1
+
+
 @router.post("/collect/{symbol}")
 async def collect_financials(
     symbol: str,
@@ -29,8 +90,14 @@ async def collect_financials(
         db=db,
         provider=provider,
     )
-    balance_sheet_service = BalanceSheetService(db=db)
-    cash_flow_service = CashFlowStatementService(db=db)
+
+    balance_sheet_service = BalanceSheetService(
+        db=db,
+    )
+
+    cash_flow_service = CashFlowStatementService(
+        db=db,
+    )
 
     try:
         income_statements = (
@@ -51,19 +118,101 @@ async def collect_financials(
             )
         )
 
+        latest_income_date = (
+            _latest_period_end_date(
+                income_statements
+            )
+        )
+
+        latest_balance_date = (
+            _latest_period_end_date(
+                balance_sheets
+            )
+        )
+
+        latest_cash_flow_date = (
+            _latest_period_end_date(
+                cash_flow_statements
+            )
+        )
+
+        latest_income_quarter = (
+            _latest_quarterly_period_end_date(
+                income_statements
+            )
+        )
+
+        latest_balance_quarter = (
+            _latest_quarterly_period_end_date(
+                balance_sheets
+            )
+        )
+
+        latest_cash_flow_quarter = (
+            _latest_quarterly_period_end_date(
+                cash_flow_statements
+            )
+        )
+
+        quarterly_dates = [
+            latest_income_quarter,
+            latest_balance_quarter,
+            latest_cash_flow_quarter,
+        ]
+
         return {
-            "message": "Financial statements collected successfully.",
+            "message": (
+                "Financial statements collected successfully."
+            ),
             "symbol": clean_symbol,
             "counts": {
-                "income_statements": len(income_statements),
-                "balance_sheets": len(balance_sheets),
-                "cash_flow_statements": len(cash_flow_statements),
+                "income_statements": len(
+                    income_statements
+                ),
+                "balance_sheets": len(
+                    balance_sheets
+                ),
+                "cash_flow_statements": len(
+                    cash_flow_statements
+                ),
             },
             "total_count": (
                 len(income_statements)
                 + len(balance_sheets)
                 + len(cash_flow_statements)
             ),
+            "latest_periods": {
+                "income_statements": (
+                    latest_income_date
+                ),
+                "balance_sheets": (
+                    latest_balance_date
+                ),
+                "cash_flow_statements": (
+                    latest_cash_flow_date
+                ),
+            },
+            "latest_quarterly_periods": {
+                "income_statements": (
+                    latest_income_quarter
+                ),
+                "balance_sheets": (
+                    latest_balance_quarter
+                ),
+                "cash_flow_statements": (
+                    latest_cash_flow_quarter
+                ),
+            },
+            "quarterly_alignment": {
+                "ok": _quarterly_alignment_ok(
+                    quarterly_dates
+                ),
+                "spread_days": (
+                    _calculate_date_spread_days(
+                        quarterly_dates
+                    )
+                ),
+            },
         }
 
     except ValueError as exc:
