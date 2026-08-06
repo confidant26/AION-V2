@@ -5,12 +5,33 @@ import yfinance as yf
 from app.mappers.cash_flow_statement_mapper import (
     CashFlowStatementMapper,
 )
-from app.schemas.cash_flow_statement import CashFlowStatementCreate
+from app.schemas.cash_flow_statement import (
+    CashFlowStatementCreate,
+)
 
 
 class YahooCashFlowProvider:
     @staticmethod
+    def _has_financial_data(
+        statement: CashFlowStatementCreate,
+    ) -> bool:
+        values = statement.model_dump(
+            exclude={
+                "asset_id",
+                "period_end_date",
+                "period_type",
+                "currency",
+            }
+        )
+
+        return any(
+            value is not None
+            for value in values.values()
+        )
+
+    @classmethod
     def _extract_statements(
+        cls,
         *,
         asset_id: int,
         symbol: str,
@@ -27,22 +48,36 @@ class YahooCashFlowProvider:
         if dataframe is None or dataframe.empty:
             return []
 
-        statements: list[CashFlowStatementCreate] = []
+        statements: list[
+            CashFlowStatementCreate
+        ] = []
 
         for column in dataframe.columns:
             period_end_date = column.date()
 
-            values = dataframe[column].to_dict()
+            values = dataframe[
+                column
+            ].to_dict()
 
-            statement = CashFlowStatementMapper.from_yahoo_column(
-                asset_id=asset_id,
-                period_end_date=period_end_date,
-                period_type=period_type,
-                currency=currency,
-                values=values,
+            statement = (
+                CashFlowStatementMapper
+                .from_yahoo_column(
+                    asset_id=asset_id,
+                    period_end_date=period_end_date,
+                    period_type=period_type,
+                    currency=currency,
+                    values=values,
+                )
             )
 
-            statements.append(statement)
+            if not cls._has_financial_data(
+                statement
+            ):
+                continue
+
+            statements.append(
+                statement
+            )
 
         return statements
 
@@ -54,18 +89,22 @@ class YahooCashFlowProvider:
         symbol: str,
         currency: str | None,
     ) -> Sequence[CashFlowStatementCreate]:
-        annual_statements = cls._extract_statements(
-            asset_id=asset_id,
-            symbol=symbol,
-            period_type="annual",
-            currency=currency,
+        annual_statements = (
+            cls._extract_statements(
+                asset_id=asset_id,
+                symbol=symbol,
+                period_type="annual",
+                currency=currency,
+            )
         )
 
-        quarterly_statements = cls._extract_statements(
-            asset_id=asset_id,
-            symbol=symbol,
-            period_type="quarterly",
-            currency=currency,
+        quarterly_statements = (
+            cls._extract_statements(
+                asset_id=asset_id,
+                symbol=symbol,
+                period_type="quarterly",
+                currency=currency,
+            )
         )
 
         return [

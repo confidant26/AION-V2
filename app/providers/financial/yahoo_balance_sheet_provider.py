@@ -8,7 +8,26 @@ from app.schemas.balance_sheet import BalanceSheetCreate
 
 class YahooBalanceSheetProvider:
     @staticmethod
+    def _has_financial_data(
+        statement: BalanceSheetCreate,
+    ) -> bool:
+        values = statement.model_dump(
+            exclude={
+                "asset_id",
+                "period_end_date",
+                "period_type",
+                "currency",
+            }
+        )
+
+        return any(
+            value is not None
+            for value in values.values()
+        )
+
+    @classmethod
     def _extract_statements(
+        cls,
         *,
         asset_id: int,
         symbol: str,
@@ -30,17 +49,29 @@ class YahooBalanceSheetProvider:
         for column in dataframe.columns:
             period_end_date = column.date()
 
-            values = dataframe[column].to_dict()
+            values = dataframe[
+                column
+            ].to_dict()
 
-            statement = BalanceSheetMapper.from_yahoo_column(
-                asset_id=asset_id,
-                period_end_date=period_end_date,
-                period_type=period_type,
-                currency=currency,
-                values=values,
+            statement = (
+                BalanceSheetMapper
+                .from_yahoo_column(
+                    asset_id=asset_id,
+                    period_end_date=period_end_date,
+                    period_type=period_type,
+                    currency=currency,
+                    values=values,
+                )
             )
 
-            statements.append(statement)
+            if not cls._has_financial_data(
+                statement
+            ):
+                continue
+
+            statements.append(
+                statement
+            )
 
         return statements
 
@@ -52,18 +83,22 @@ class YahooBalanceSheetProvider:
         symbol: str,
         currency: str | None,
     ) -> Sequence[BalanceSheetCreate]:
-        annual_statements = cls._extract_statements(
-            asset_id=asset_id,
-            symbol=symbol,
-            period_type="annual",
-            currency=currency,
+        annual_statements = (
+            cls._extract_statements(
+                asset_id=asset_id,
+                symbol=symbol,
+                period_type="annual",
+                currency=currency,
+            )
         )
 
-        quarterly_statements = cls._extract_statements(
-            asset_id=asset_id,
-            symbol=symbol,
-            period_type="quarterly",
-            currency=currency,
+        quarterly_statements = (
+            cls._extract_statements(
+                asset_id=asset_id,
+                symbol=symbol,
+                period_type="quarterly",
+                currency=currency,
+            )
         )
 
         return [

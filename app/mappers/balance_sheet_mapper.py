@@ -9,10 +9,15 @@ class BalanceSheetMapper:
     FIELD_MAP = {
         "Total Assets": "total_assets",
         "Current Assets": "current_assets",
+
+        # Prefer actual cash first.
+        # If Yahoo does not provide it, fall back to
+        # cash + short-term investments.
+        "Cash And Cash Equivalents": "cash_and_cash_equivalents",
         "Cash Cash Equivalents And Short Term Investments": (
             "cash_and_cash_equivalents"
         ),
-        "Cash And Cash Equivalents": "cash_and_cash_equivalents",
+
         "Inventory": "inventory",
         "Accounts Receivable": "accounts_receivable",
         "Total Non Current Assets": "total_non_current_assets",
@@ -37,7 +42,9 @@ class BalanceSheetMapper:
     }
 
     @staticmethod
-    def _to_decimal(value: Any) -> Decimal | None:
+    def _to_decimal(
+        value: Any,
+    ) -> Decimal | None:
         if value is None:
             return None
 
@@ -49,7 +56,12 @@ class BalanceSheetMapper:
                 return None
 
             return Decimal(str(value))
-        except (InvalidOperation, TypeError, ValueError):
+
+        except (
+            InvalidOperation,
+            TypeError,
+            ValueError,
+        ):
             return None
 
     @classmethod
@@ -69,11 +81,16 @@ class BalanceSheetMapper:
             "currency": currency,
         }
 
-        for yahoo_field, schema_field in cls.FIELD_MAP.items():
+        for (
+            yahoo_field,
+            schema_field,
+        ) in cls.FIELD_MAP.items():
             if yahoo_field not in values:
                 continue
 
-            mapped_value = cls._to_decimal(values[yahoo_field])
+            mapped_value = cls._to_decimal(
+                values[yahoo_field]
+            )
 
             if (
                 schema_field not in mapped_values
@@ -81,4 +98,6 @@ class BalanceSheetMapper:
             ):
                 mapped_values[schema_field] = mapped_value
 
-        return BalanceSheetCreate(**mapped_values)
+        return BalanceSheetCreate(
+            **mapped_values
+        )
