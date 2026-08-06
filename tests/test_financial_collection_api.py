@@ -159,6 +159,11 @@ def test_financial_collection_endpoint_success(
         "spread_days": 0,
     }
 
+    assert body["data_quality"] == {
+        "status": "healthy",
+        "warnings": [],
+    }
+
 
 class FakeIncomeStatementNotFoundService:
     def __init__(
@@ -195,6 +200,7 @@ def test_financial_collection_endpoint_returns_404(
     )
 
     assert response.status_code == 404
+
     assert response.json()["detail"] == (
         "Asset not found for symbol: INVALID"
     )

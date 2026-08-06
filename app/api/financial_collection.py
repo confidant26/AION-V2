@@ -77,6 +77,48 @@ def _quarterly_alignment_ok(
     ) == 1
 
 
+def _build_data_quality_warnings(
+    *,
+    income_statements: list,
+    balance_sheets: list,
+    cash_flow_statements: list,
+    latest_income_quarter: date | None,
+    latest_balance_quarter: date | None,
+    latest_cash_flow_quarter: date | None,
+) -> list[str]:
+    warnings: list[str] = []
+
+    if not income_statements:
+        warnings.append(
+            "Income statements are missing."
+        )
+
+    if not balance_sheets:
+        warnings.append(
+            "Balance sheets are missing."
+        )
+
+    if not cash_flow_statements:
+        warnings.append(
+            "Cash flow statements are missing."
+        )
+
+    quarterly_dates = [
+        latest_income_quarter,
+        latest_balance_quarter,
+        latest_cash_flow_quarter,
+    ]
+
+    if not _quarterly_alignment_ok(
+        quarterly_dates
+    ):
+        warnings.append(
+            "Latest quarterly financial periods are not aligned."
+        )
+
+    return warnings
+
+
 @router.post("/collect/{symbol}")
 async def collect_financials(
     symbol: str,
@@ -160,6 +202,47 @@ async def collect_financials(
             latest_cash_flow_quarter,
         ]
 
+        quarterly_alignment_ok = (
+            _quarterly_alignment_ok(
+                quarterly_dates
+            )
+        )
+
+        quarterly_spread_days = (
+            _calculate_date_spread_days(
+                quarterly_dates
+            )
+        )
+
+        warnings = (
+            _build_data_quality_warnings(
+                income_statements=(
+                    income_statements
+                ),
+                balance_sheets=(
+                    balance_sheets
+                ),
+                cash_flow_statements=(
+                    cash_flow_statements
+                ),
+                latest_income_quarter=(
+                    latest_income_quarter
+                ),
+                latest_balance_quarter=(
+                    latest_balance_quarter
+                ),
+                latest_cash_flow_quarter=(
+                    latest_cash_flow_quarter
+                ),
+            )
+        )
+
+        data_quality_status = (
+            "healthy"
+            if not warnings
+            else "warning"
+        )
+
         return {
             "message": (
                 "Financial statements collected successfully."
@@ -204,14 +287,16 @@ async def collect_financials(
                 ),
             },
             "quarterly_alignment": {
-                "ok": _quarterly_alignment_ok(
-                    quarterly_dates
-                ),
+                "ok": quarterly_alignment_ok,
                 "spread_days": (
-                    _calculate_date_spread_days(
-                        quarterly_dates
-                    )
+                    quarterly_spread_days
                 ),
+            },
+            "data_quality": {
+                "status": (
+                    data_quality_status
+                ),
+                "warnings": warnings,
             },
         }
 
