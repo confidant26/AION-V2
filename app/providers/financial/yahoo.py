@@ -38,10 +38,7 @@ class YahooFinancialProvider(FinancialDataProvider):
         period_type: str,
         currency: str | None,
     ) -> list[dict]:
-        if table is None:
-            return []
-
-        if table.empty:
+        if table is None or table.empty:
             return []
 
         statements: list[dict] = []
@@ -54,39 +51,73 @@ class YahooFinancialProvider(FinancialDataProvider):
 
             row = table[column]
 
-            statements.append(
-                {
-                    "period_end_date": period_end_date,
-                    "period_type": period_type,
-                    "currency": currency,
-                    "total_revenue": row.get("Total Revenue"),
-                    "cost_of_revenue": row.get("Cost Of Revenue"),
-                    "gross_profit": row.get("Gross Profit"),
-                    "operating_expense": row.get(
-                        "Operating Expense"
-                    ),
-                    "operating_income": row.get(
-                        "Operating Income"
-                    ),
-                    "net_non_operating_interest_income_expense": (
+            statement = {
+                "period_end_date": period_end_date,
+                "period_type": period_type,
+                "currency": currency,
+                "total_revenue": self._to_number_or_none(
+                    row.get("Total Revenue")
+                ),
+                "cost_of_revenue": self._to_number_or_none(
+                    row.get("Cost Of Revenue")
+                ),
+                "gross_profit": self._to_number_or_none(
+                    row.get("Gross Profit")
+                ),
+                "operating_expense": self._to_number_or_none(
+                    row.get("Operating Expense")
+                ),
+                "operating_income": self._to_number_or_none(
+                    row.get("Operating Income")
+                ),
+                "net_non_operating_interest_income_expense": (
+                    self._to_number_or_none(
                         row.get(
                             "Net Non Operating Interest "
                             "Income Expense"
                         )
-                    ),
-                    "pretax_income": row.get("Pretax Income"),
-                    "tax_provision": row.get("Tax Provision"),
-                    "net_income": row.get("Net Income"),
-                    "diluted_average_shares": row.get(
-                        "Diluted Average Shares"
-                    ),
-                    "diluted_eps": self._to_string_or_none(
-                        row.get("Diluted EPS")
-                    ),
-                }
-            )
+                    )
+                ),
+                "pretax_income": self._to_number_or_none(
+                    row.get("Pretax Income")
+                ),
+                "tax_provision": self._to_number_or_none(
+                    row.get("Tax Provision")
+                ),
+                "net_income": self._to_number_or_none(
+                    row.get("Net Income")
+                ),
+                "diluted_average_shares": self._to_number_or_none(
+                    row.get("Diluted Average Shares")
+                ),
+                "diluted_eps": self._to_string_or_none(
+                    row.get("Diluted EPS")
+                ),
+            }
+
+            if not self._has_core_financial_data(statement):
+                continue
+
+            statements.append(statement)
 
         return statements
+
+    @staticmethod
+    def _has_core_financial_data(
+        statement: dict,
+    ) -> bool:
+        core_fields = (
+            "total_revenue",
+            "gross_profit",
+            "operating_income",
+            "pretax_income",
+            "net_income",
+        )
+
+        return any(
+            statement.get(field_name) is not None
+            for field_name in core_fields
+        )
 
     @staticmethod
     def _to_date(
@@ -104,8 +135,32 @@ class YahooFinancialProvider(FinancialDataProvider):
         try:
             return pd.to_datetime(value).date()
 
-        except (TypeError, ValueError):
+        except (
+            TypeError,
+            ValueError,
+        ):
             return None
+
+    @staticmethod
+    def _to_number_or_none(
+        value,
+    ):
+        if value is None:
+            return None
+
+        try:
+            numeric_value = float(value)
+
+            if math.isnan(numeric_value):
+                return None
+
+            return value
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return value
 
     @staticmethod
     def _to_string_or_none(
@@ -120,7 +175,10 @@ class YahooFinancialProvider(FinancialDataProvider):
             if math.isnan(numeric_value):
                 return None
 
-        except (TypeError, ValueError):
+        except (
+            TypeError,
+            ValueError,
+        ):
             pass
 
         return str(value)
