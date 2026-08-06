@@ -128,7 +128,55 @@ class FakeLaggingCashFlowStatementService:
         ]
 
 
-def test_financial_collection_endpoint_success(
+class FakeCompositeScoreResult:
+    def model_dump(
+        self,
+        mode=None,
+    ):
+        return {
+            "symbol": "AAPL",
+            "as_of_date": "2026-06-30",
+            "currency": "USD",
+            "growth_score": "0.54",
+            "quality_score": "0.83",
+            "valuation_score": "0.38",
+            "composite_score": "0.59",
+            "confidence": "1.00",
+        }
+
+
+class FakeCompositeScoreService:
+    def __init__(
+        self,
+        db,
+    ):
+        pass
+
+    def get_composite_score(
+        self,
+        symbol,
+    ):
+        return FakeCompositeScoreResult()
+
+
+class FakeIncomeStatementNotFoundService:
+    def __init__(
+        self,
+        db,
+        provider,
+    ):
+        pass
+
+    async def collect_income_statements(
+        self,
+        symbol,
+    ):
+        raise ValueError(
+            "Asset not found for symbol: INVALID"
+        )
+
+
+def patch_success_services(
     monkeypatch,
 ):
     monkeypatch.setattr(
@@ -149,6 +197,14 @@ def test_financial_collection_endpoint_success(
     monkeypatch.setattr(
         "app.api.financial_collection.get_financial_data_provider",
         lambda: object(),
+    )
+
+
+def test_financial_collection_endpoint_success(
+    monkeypatch,
+):
+    patch_success_services(
+        monkeypatch
     )
 
     response = client.post(
@@ -189,6 +245,41 @@ def test_financial_collection_endpoint_success(
     assert body["data_quality"] == {
         "status": "healthy",
         "warnings": [],
+    }
+
+    assert "analysis" not in body
+
+
+def test_financial_collection_endpoint_includes_analysis(
+    monkeypatch,
+):
+    patch_success_services(
+        monkeypatch
+    )
+
+    monkeypatch.setattr(
+        "app.api.financial_collection.CompositeScoreService",
+        FakeCompositeScoreService,
+    )
+
+    response = client.post(
+        "/financials/collect/aapl"
+        "?include_analysis=true"
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["analysis"] == {
+        "symbol": "AAPL",
+        "as_of_date": "2026-06-30",
+        "currency": "USD",
+        "growth_score": "0.54",
+        "quality_score": "0.83",
+        "valuation_score": "0.38",
+        "composite_score": "0.59",
+        "confidence": "1.00",
     }
 
 
@@ -243,23 +334,6 @@ def test_financial_collection_endpoint_warns_on_misalignment(
             )
         ],
     }
-
-
-class FakeIncomeStatementNotFoundService:
-    def __init__(
-        self,
-        db,
-        provider,
-    ):
-        pass
-
-    async def collect_income_statements(
-        self,
-        symbol,
-    ):
-        raise ValueError(
-            "Asset not found for symbol: INVALID"
-        )
 
 
 def test_financial_collection_endpoint_returns_404(

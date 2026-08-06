@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_db
@@ -9,6 +9,7 @@ from app.services.balance_sheet_service import BalanceSheetService
 from app.services.cash_flow_statement_service import (
     CashFlowStatementService,
 )
+from app.services.composite_score_service import CompositeScoreService
 from app.services.income_statement_service import IncomeStatementService
 
 
@@ -122,6 +123,13 @@ def _build_data_quality_warnings(
 @router.post("/collect/{symbol}")
 async def collect_financials(
     symbol: str,
+    include_analysis: bool = Query(
+        default=False,
+        description=(
+            "Include the latest composite analysis "
+            "after financial collection."
+        ),
+    ),
     db: Session = Depends(get_db),
 ) -> dict:
     clean_symbol = symbol.strip().upper()
@@ -243,7 +251,7 @@ async def collect_financials(
             else "warning"
         )
 
-        return {
+        response = {
             "message": (
                 "Financial statements collected successfully."
             ),
@@ -299,6 +307,25 @@ async def collect_financials(
                 "warnings": warnings,
             },
         }
+
+        if include_analysis:
+            composite_service = CompositeScoreService(
+                db=db,
+            )
+
+            composite_score = (
+                composite_service.get_composite_score(
+                    symbol=clean_symbol,
+                )
+            )
+
+            response["analysis"] = (
+                composite_score.model_dump(
+                    mode="json"
+                )
+            )
+
+        return response
 
     except ValueError as exc:
         raise HTTPException(
