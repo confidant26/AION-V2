@@ -5,6 +5,9 @@ from app.providers.financial.base import (
 from app.providers.financial.fallback import (
     FallbackFinancialProvider,
 )
+from app.providers.financial.sec import (
+    SecFinancialProvider,
+)
 from app.providers.financial.yahoo import (
     YahooFinancialProvider,
 )
@@ -18,6 +21,9 @@ def create_financial_provider(
         .strip()
         .lower()
     )
+
+    if clean_name == "sec":
+        return SecFinancialProvider()
 
     if clean_name == "yahoo":
         return YahooFinancialProvider()

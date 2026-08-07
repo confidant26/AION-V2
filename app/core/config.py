@@ -44,6 +44,8 @@ class Settings(BaseSettings):
         "yahoo"
     )
 
+    sec_user_agent: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
