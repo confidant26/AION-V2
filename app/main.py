@@ -20,6 +20,7 @@ from app.api.income_statement import (
 )
 from app.api.market import router as market_router
 from app.api.quality_score import router as quality_score_router
+from app.api.ranking import router as ranking_router
 from app.api.ttm_financials import router as ttm_financials_router
 from app.api.ttm_valuation_metrics import (
     router as ttm_valuation_metrics_router,
@@ -53,6 +54,7 @@ app.include_router(ttm_financials_router)
 app.include_router(ttm_valuation_metrics_router)
 app.include_router(valuation_score_router)
 app.include_router(composite_score_router)
+app.include_router(ranking_router)
 
 
 @app.get("/")
@@ -75,7 +77,9 @@ def health_check() -> dict[str, str]:
 def database_health_check() -> dict[str, str]:
     try:
         with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
+            connection.execute(
+                text("SELECT 1")
+            )
 
         return {
             "status": "healthy",
