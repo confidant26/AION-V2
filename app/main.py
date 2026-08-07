@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from redis import Redis
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -30,6 +32,7 @@ from app.api.valuation_score import router as valuation_score_router
 from app.api.watchlist import router as watchlist_router
 from app.core.config import settings
 from app.db.session import engine
+from app.providers.resilience import ProviderError
 
 
 app = FastAPI(
@@ -57,6 +60,19 @@ app.include_router(valuation_score_router)
 app.include_router(composite_score_router)
 app.include_router(ranking_router)
 app.include_router(watchlist_router)
+
+
+@app.exception_handler(ProviderError)
+async def provider_error_handler(
+    request,
+    exc: ProviderError,
+):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": str(exc),
+        },
+    )
 
 
 @app.get("/")
@@ -93,3 +109,70 @@ def database_health_check() -> dict[str, str]:
             "status": "unhealthy",
             "database": "disconnected",
         }
+
+
+@app.get("/health/readiness")
+def readiness_check():
+    database_ok = False
+    redis_ok = False
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(
+                text("SELECT 1")
+            )
+
+        database_ok = True
+
+    except SQLAlchemyError:
+        database_ok = False
+
+    redis_client = None
+
+    try:
+        redis_client = Redis.from_url(
+            settings.redis_url,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
+
+        redis_ok = bool(
+            redis_client.ping()
+        )
+
+    except Exception:
+        redis_ok = False
+
+    finally:
+        if redis_client is not None:
+            redis_client.close()
+
+    healthy = (
+        database_ok
+        and redis_ok
+    )
+
+    return JSONResponse(
+        status_code=(
+            200
+            if healthy
+            else 503
+        ),
+        content={
+            "status": (
+                "ready"
+                if healthy
+                else "not_ready"
+            ),
+            "database": (
+                "connected"
+                if database_ok
+                else "disconnected"
+            ),
+            "redis": (
+                "connected"
+                if redis_ok
+                else "disconnected"
+            ),
+        },
+    )

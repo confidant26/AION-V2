@@ -4,6 +4,7 @@ from app.models.balance_sheet import BalanceSheet
 from app.providers.financial.yahoo_balance_sheet_provider import (
     YahooBalanceSheetProvider,
 )
+from app.providers.resilience import run_sync_with_retry
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.balance_sheet_repository import (
     BalanceSheetRepository,
@@ -16,7 +17,11 @@ class BalanceSheetService:
         db: Session,
     ):
         self.db = db
-        self.asset_repository = AssetRepository(db)
+
+        self.asset_repository = (
+            AssetRepository(db)
+        )
+
         self.balance_sheet_repository = (
             BalanceSheetRepository(db)
         )
@@ -25,21 +30,39 @@ class BalanceSheetService:
         self,
         symbol: str,
     ) -> list[BalanceSheet]:
-        clean_symbol = symbol.strip().upper()
+        clean_symbol = (
+            symbol.strip().upper()
+        )
 
-        asset = self.asset_repository.get_by_symbol(
-            clean_symbol
+        asset = (
+            self.asset_repository
+            .get_by_symbol(
+                clean_symbol
+            )
         )
 
         if asset is None:
             raise ValueError(
-                f"Asset not found for symbol: {clean_symbol}"
+                f"Asset not found for symbol: "
+                f"{clean_symbol}"
             )
 
-        statements = YahooBalanceSheetProvider.fetch(
-            asset_id=asset.id,
-            symbol=asset.symbol,
-            currency=asset.currency,
+        statements = (
+            await run_sync_with_retry(
+                lambda: (
+                    YahooBalanceSheetProvider
+                    .fetch(
+                        asset_id=asset.id,
+                        symbol=asset.symbol,
+                        currency=asset.currency,
+                    )
+                ),
+                provider_name="Yahoo Finance",
+                operation_name=(
+                    f"balance sheets for "
+                    f"{clean_symbol}"
+                ),
+            )
         )
 
         if not statements:
@@ -48,22 +71,31 @@ class BalanceSheetService:
                 f"{clean_symbol}"
             )
 
-        saved_statements: list[BalanceSheet] = []
+        saved_statements: list[
+            BalanceSheet
+        ] = []
 
         try:
             for statement in statements:
                 saved_statement = (
-                    self.balance_sheet_repository.upsert(
+                    self.balance_sheet_repository
+                    .upsert(
                         statement
                     )
                 )
 
-                saved_statements.append(saved_statement)
+                saved_statements.append(
+                    saved_statement
+                )
 
             self.db.commit()
 
-            for saved_statement in saved_statements:
-                self.db.refresh(saved_statement)
+            for saved_statement in (
+                saved_statements
+            ):
+                self.db.refresh(
+                    saved_statement
+                )
 
             return saved_statements
 
@@ -76,19 +108,26 @@ class BalanceSheetService:
         symbol: str,
         limit: int = 20,
     ) -> list[BalanceSheet]:
-        clean_symbol = symbol.strip().upper()
+        clean_symbol = (
+            symbol.strip().upper()
+        )
 
-        asset = self.asset_repository.get_by_symbol(
-            clean_symbol
+        asset = (
+            self.asset_repository
+            .get_by_symbol(
+                clean_symbol
+            )
         )
 
         if asset is None:
             raise ValueError(
-                f"Asset not found for symbol: {clean_symbol}"
+                f"Asset not found for symbol: "
+                f"{clean_symbol}"
             )
 
         statements = (
-            self.balance_sheet_repository.get_by_asset_id(
+            self.balance_sheet_repository
+            .get_by_asset_id(
                 asset_id=asset.id,
                 limit=limit,
             )
