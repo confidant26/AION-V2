@@ -1,9 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_db
-from app.schemas.asset import AssetCreate, AssetResponse
-from app.services.asset_refresh_service import AssetRefreshService
+from app.schemas.asset import (
+    AssetCreate,
+    AssetResponse,
+)
+from app.schemas.asset_batch_refresh import (
+    AssetBatchRefreshRequest,
+    AssetBatchRefreshResponse,
+)
+from app.services.asset_batch_refresh_service import (
+    AssetBatchRefreshService,
+)
+from app.services.asset_refresh_service import (
+    AssetRefreshService,
+)
 from app.services.asset_service import (
     AssetAlreadyExistsError,
     AssetNotFoundError,
@@ -26,7 +44,9 @@ def create_asset(
     asset_data: AssetCreate,
     db: Session = Depends(get_db),
 ) -> AssetResponse:
-    service = AssetService(db)
+    service = AssetService(
+        db
+    )
 
     try:
         return service.create_asset(
@@ -35,7 +55,9 @@ def create_asset(
 
     except AssetAlreadyExistsError as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
             detail=str(exc),
         ) from exc
 
@@ -59,7 +81,9 @@ def list_assets(
     ),
     db: Session = Depends(get_db),
 ) -> list[AssetResponse]:
-    service = AssetService(db)
+    service = AssetService(
+        db
+    )
 
     return service.list_assets(
         offset=offset,
@@ -68,13 +92,40 @@ def list_assets(
     )
 
 
-@router.post("/refresh/{symbol}")
+@router.post(
+    "/refresh-batch",
+    response_model=(
+        AssetBatchRefreshResponse
+    ),
+)
+async def refresh_assets_batch(
+    request: AssetBatchRefreshRequest,
+) -> AssetBatchRefreshResponse:
+    service = (
+        AssetBatchRefreshService()
+    )
+
+    return await service.refresh_many(
+        symbols=request.symbols,
+        include_analysis=(
+            request.include_analysis
+        ),
+        concurrency=(
+            request.concurrency
+        ),
+    )
+
+
+@router.post(
+    "/refresh/{symbol}"
+)
 async def refresh_asset(
     symbol: str,
     include_analysis: bool = Query(
         default=False,
         description=(
-            "Include TTM financials, valuation metrics, "
+            "Include TTM financials, "
+            "valuation metrics, "
             "and composite score."
         ),
     ),
@@ -87,12 +138,16 @@ async def refresh_asset(
     try:
         return await service.refresh(
             symbol=symbol,
-            include_analysis=include_analysis,
+            include_analysis=(
+                include_analysis
+            ),
         )
 
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
             detail=str(exc),
         ) from exc
 
@@ -105,7 +160,9 @@ def get_asset(
     asset_id: int,
     db: Session = Depends(get_db),
 ) -> AssetResponse:
-    service = AssetService(db)
+    service = AssetService(
+        db
+    )
 
     try:
         return service.get_asset(
@@ -114,6 +171,8 @@ def get_asset(
 
     except AssetNotFoundError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
             detail=str(exc),
         ) from exc
