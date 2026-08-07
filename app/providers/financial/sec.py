@@ -8,11 +8,20 @@ import zlib
 from urllib.request import Request, urlopen
 
 from app.core.config import settings
-from app.providers.financial.base import FinancialDataProvider
-from app.providers.resilience import run_sync_with_retry
+from app.core.fiscal_period import (
+    canonical_period_end_date,
+)
+from app.providers.financial.base import (
+    FinancialDataProvider,
+)
+from app.providers.resilience import (
+    run_sync_with_retry,
+)
 
 
-class SecFinancialProvider(FinancialDataProvider):
+class SecFinancialProvider(
+    FinancialDataProvider
+):
     provider_name = "sec"
 
     TICKERS_URL = (
@@ -100,8 +109,10 @@ class SecFinancialProvider(FinancialDataProvider):
             )
 
         return await run_sync_with_retry(
-            lambda: self._fetch_income_statements(
-                clean_symbol
+            lambda: (
+                self._fetch_income_statements(
+                    clean_symbol
+                )
             ),
             provider_name="SEC EDGAR",
             operation_name=(
@@ -120,14 +131,18 @@ class SecFinancialProvider(FinancialDataProvider):
             symbol
         )
 
-        company_facts = self._get_json(
-            self.COMPANY_FACTS_URL.format(
-                cik=cik
+        company_facts = (
+            self._get_json(
+                self.COMPANY_FACTS_URL.format(
+                    cik=cik
+                )
             )
         )
 
-        statements = self._build_statements(
-            company_facts
+        statements = (
+            self._build_statements(
+                company_facts
+            )
         )
 
         if not statements:
@@ -174,12 +189,26 @@ class SecFinancialProvider(FinancialDataProvider):
 
         if (
             len(annual_statements) < 2
-            or len(quarterly_statements) < 4
+            or len(
+                quarterly_statements
+            ) < 4
         ):
             raise ValueError(
                 f"SEC financial history is incomplete "
                 f"for symbol: {symbol}"
             )
+
+        annual_statements = (
+            self._normalize_period_dates(
+                annual_statements
+            )
+        )
+
+        quarterly_statements = (
+            self._normalize_period_dates(
+                quarterly_statements
+            )
+        )
 
         return (
             annual_statements
@@ -187,8 +216,77 @@ class SecFinancialProvider(FinancialDataProvider):
         )
 
     @staticmethod
+    def _normalize_period_dates(
+        statements: list[dict],
+    ) -> list[dict]:
+        normalized: list[dict] = []
+
+        seen: set[
+            tuple[
+                str,
+                date,
+            ]
+        ] = set()
+
+        for statement in statements:
+            source_date = statement.get(
+                "period_end_date"
+            )
+
+            if not isinstance(
+                source_date,
+                date,
+            ):
+                continue
+
+            canonical_date = (
+                canonical_period_end_date(
+                    source_date
+                )
+            )
+
+            key = (
+                statement[
+                    "period_type"
+                ],
+                canonical_date,
+            )
+
+            if key in seen:
+                continue
+
+            seen.add(
+                key
+            )
+
+            normalized_statement = {
+                **statement,
+                "period_end_date": (
+                    canonical_date
+                ),
+            }
+
+            normalized.append(
+                normalized_statement
+            )
+
+        return sorted(
+            normalized,
+            key=lambda statement: (
+                statement[
+                    "period_end_date"
+                ]
+            ),
+            reverse=True,
+        )
+
+    @staticmethod
     def _validate_user_agent() -> None:
-        if not settings.sec_user_agent.strip():
+        if not (
+            settings
+            .sec_user_agent
+            .strip()
+        ):
             raise ValueError(
                 "SEC_USER_AGENT must be configured "
                 "before using the SEC provider."
@@ -207,7 +305,10 @@ class SecFinancialProvider(FinancialDataProvider):
             cls.TICKERS_URL
         )
 
-        mapping: dict[str, str] = {}
+        mapping: dict[
+            str,
+            str,
+        ] = {}
 
         for item in payload.values():
             ticker = str(
@@ -237,8 +338,11 @@ class SecFinancialProvider(FinancialDataProvider):
         self,
         symbol: str,
     ) -> str:
-        cik = self._ticker_map().get(
-            symbol
+        cik = (
+            self._ticker_map()
+            .get(
+                symbol
+            )
         )
 
         if cik is None:
@@ -257,7 +361,8 @@ class SecFinancialProvider(FinancialDataProvider):
             url,
             headers={
                 "User-Agent": (
-                    settings.sec_user_agent
+                    settings
+                    .sec_user_agent
                 ),
                 "Accept": (
                     "application/json"
@@ -275,7 +380,9 @@ class SecFinancialProvider(FinancialDataProvider):
                 .provider_timeout_seconds
             ),
         ) as response:
-            raw_data = response.read()
+            raw_data = (
+                response.read()
+            )
 
             content_encoding = (
                 response.headers.get(
@@ -286,21 +393,33 @@ class SecFinancialProvider(FinancialDataProvider):
                 .lower()
             )
 
-            if content_encoding == "gzip":
-                raw_data = gzip.decompress(
-                    raw_data
+            if (
+                content_encoding
+                == "gzip"
+            ):
+                raw_data = (
+                    gzip.decompress(
+                        raw_data
+                    )
                 )
 
-            elif content_encoding == "deflate":
+            elif (
+                content_encoding
+                == "deflate"
+            ):
                 try:
-                    raw_data = zlib.decompress(
-                        raw_data
+                    raw_data = (
+                        zlib.decompress(
+                            raw_data
+                        )
                     )
 
                 except zlib.error:
-                    raw_data = zlib.decompress(
-                        raw_data,
-                        -zlib.MAX_WBITS,
+                    raw_data = (
+                        zlib.decompress(
+                            raw_data,
+                            -zlib.MAX_WBITS,
+                        )
                     )
 
             return json.loads(
@@ -398,7 +517,9 @@ class SecFinancialProvider(FinancialDataProvider):
                     preferred_unit=(
                         preferred_unit
                     ),
-                    period_type="annual",
+                    period_type=(
+                        "annual"
+                    ),
                 )
             )
 
@@ -409,7 +530,9 @@ class SecFinancialProvider(FinancialDataProvider):
                     preferred_unit=(
                         preferred_unit
                     ),
-                    period_type="quarterly",
+                    period_type=(
+                        "quarterly"
+                    ),
                 )
             )
 
@@ -418,7 +541,8 @@ class SecFinancialProvider(FinancialDataProvider):
                 value,
             ) in annual_values.items():
                 statement = (
-                    annual_by_date.setdefault(
+                    annual_by_date
+                    .setdefault(
                         period_end,
                         self._empty_statement(
                             period_end=(
@@ -427,7 +551,9 @@ class SecFinancialProvider(FinancialDataProvider):
                             period_type=(
                                 "annual"
                             ),
-                            currency=currency,
+                            currency=(
+                                currency
+                            ),
                         ),
                     )
                 )
@@ -441,7 +567,8 @@ class SecFinancialProvider(FinancialDataProvider):
                 value,
             ) in quarterly_values.items():
                 statement = (
-                    quarterly_by_date.setdefault(
+                    quarterly_by_date
+                    .setdefault(
                         period_end,
                         self._empty_statement(
                             period_end=(
@@ -450,7 +577,9 @@ class SecFinancialProvider(FinancialDataProvider):
                             period_type=(
                                 "quarterly"
                             ),
-                            currency=currency,
+                            currency=(
+                                currency
+                            ),
                         ),
                     )
                 )
@@ -529,13 +658,21 @@ class SecFinancialProvider(FinancialDataProvider):
         self,
         *,
         facts: dict,
-        tags: tuple[str, ...],
+        tags: tuple[
+            str,
+            ...,
+        ],
         preferred_unit: str,
         period_type: str,
-    ) -> dict[date, float]:
-        concept = self._find_concept(
-            facts=facts,
-            tags=tags,
+    ) -> dict[
+        date,
+        float,
+    ]:
+        concept = (
+            self._find_concept(
+                facts=facts,
+                tags=tags,
+            )
         )
 
         if concept is None:
@@ -546,11 +683,13 @@ class SecFinancialProvider(FinancialDataProvider):
             {},
         )
 
-        values = self._choose_unit(
-            units=units,
-            preferred_unit=(
-                preferred_unit
-            ),
+        values = (
+            self._choose_unit(
+                units=units,
+                preferred_unit=(
+                    preferred_unit
+                ),
+            )
         )
 
         if not values:
@@ -565,7 +704,9 @@ class SecFinancialProvider(FinancialDataProvider):
         ] = {}
 
         for item in values:
-            if item.get("form") not in {
+            if item.get(
+                "form"
+            ) not in {
                 "10-K",
                 "10-K/A",
                 "10-Q",
@@ -596,19 +737,24 @@ class SecFinancialProvider(FinancialDataProvider):
                 continue
 
             duration_days = (
-                (end - start).days
+                (
+                    end
+                    - start
+                ).days
                 if start is not None
                 else None
             )
 
-            if period_type == "annual":
-                if (
-                    item.get("form")
-                    not in {
-                        "10-K",
-                        "10-K/A",
-                    }
-                ):
+            if (
+                period_type
+                == "annual"
+            ):
+                if item.get(
+                    "form"
+                ) not in {
+                    "10-K",
+                    "10-K/A",
+                }:
                     continue
 
                 if (
@@ -623,13 +769,12 @@ class SecFinancialProvider(FinancialDataProvider):
                     continue
 
             else:
-                if (
-                    item.get("form")
-                    not in {
-                        "10-Q",
-                        "10-Q/A",
-                    }
-                ):
+                if item.get(
+                    "form"
+                ) not in {
+                    "10-Q",
+                    "10-Q/A",
+                }:
                     continue
 
                 if (
@@ -661,8 +806,10 @@ class SecFinancialProvider(FinancialDataProvider):
             ):
                 continue
 
-            existing = candidates.get(
-                end
+            existing = (
+                candidates.get(
+                    end
+                )
             )
 
             if (
@@ -690,7 +837,10 @@ class SecFinancialProvider(FinancialDataProvider):
     def _find_concept(
         *,
         facts: dict,
-        tags: tuple[str, ...],
+        tags: tuple[
+            str,
+            ...,
+        ],
     ) -> dict | None:
         for tag in tags:
             concept = facts.get(
@@ -722,7 +872,8 @@ class SecFinancialProvider(FinancialDataProvider):
         }
 
         requested = (
-            preferred_unit.lower()
+            preferred_unit
+            .lower()
         )
 
         if requested in normalized:
@@ -730,13 +881,17 @@ class SecFinancialProvider(FinancialDataProvider):
                 requested
             ]
 
-        if preferred_unit == "USD/shares":
+        if (
+            preferred_unit
+            == "USD/shares"
+        ):
             for (
                 unit_name,
                 unit_values,
             ) in units.items():
                 lowered = (
-                    unit_name.lower()
+                    unit_name
+                    .lower()
                 )
 
                 if (
@@ -784,9 +939,12 @@ class SecFinancialProvider(FinancialDataProvider):
                 )
             ]
 
-            if len(
-                previous_quarters
-            ) < 3:
+            if (
+                len(
+                    previous_quarters
+                )
+                < 3
+            ):
                 continue
 
             first_three = (
@@ -852,12 +1010,16 @@ class SecFinancialProvider(FinancialDataProvider):
                 ):
                     continue
 
-                q4[field_name] = (
+                q4[
+                    field_name
+                ] = (
                     float(
                         annual_value
                     )
                     - sum(
-                        float(value)
+                        float(
+                            value
+                        )
                         for value
                         in quarter_values
                     )
@@ -871,8 +1033,10 @@ class SecFinancialProvider(FinancialDataProvider):
             *SecFinancialProvider.REVENUE_TAGS,
             *SecFinancialProvider.NET_INCOME_TAGS,
         ):
-            concept = facts.get(
-                tag
+            concept = (
+                facts.get(
+                    tag
+                )
             )
 
             if concept is None:
@@ -888,10 +1052,16 @@ class SecFinancialProvider(FinancialDataProvider):
 
             for unit_name in units:
                 if (
-                    len(unit_name) == 3
-                    and unit_name.isalpha()
+                    len(
+                        unit_name
+                    ) == 3
+                    and unit_name
+                    .isalpha()
                 ):
-                    return unit_name.upper()
+                    return (
+                        unit_name
+                        .upper()
+                    )
 
         return None
 
@@ -934,7 +1104,9 @@ class SecFinancialProvider(FinancialDataProvider):
 
         try:
             return date.fromisoformat(
-                str(value)
+                str(
+                    value
+                )
             )
 
         except (

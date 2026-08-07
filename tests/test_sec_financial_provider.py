@@ -3,6 +3,10 @@ from datetime import date
 import pytest
 
 from app.core.config import settings
+from app.core.fiscal_period import (
+    canonical_period_end_date,
+    period_dates_match,
+)
 from app.providers.financial.factory import (
     create_financial_provider,
 )
@@ -42,57 +46,57 @@ def concept(
 def make_company_facts():
     revenue = [
         fact(
-            start="2024-10-01",
-            end="2025-09-30",
+            start="2024-09-29",
+            end="2025-09-27",
             value=400,
             form="10-K",
             filed="2025-11-01",
         ),
         fact(
-            start="2025-10-01",
-            end="2026-09-30",
+            start="2025-09-28",
+            end="2026-09-26",
             value=440,
             form="10-K",
             filed="2026-11-01",
         ),
         fact(
-            start="2025-10-01",
-            end="2025-12-31",
+            start="2025-09-28",
+            end="2025-12-27",
             value=100,
             form="10-Q",
             filed="2026-02-01",
         ),
         fact(
-            start="2026-01-01",
-            end="2026-03-31",
+            start="2025-12-28",
+            end="2026-03-28",
             value=105,
             form="10-Q",
             filed="2026-05-01",
         ),
         fact(
-            start="2026-04-01",
-            end="2026-06-30",
+            start="2026-03-29",
+            end="2026-06-27",
             value=110,
             form="10-Q",
             filed="2026-08-01",
         ),
         fact(
-            start="2024-10-01",
-            end="2024-12-31",
+            start="2024-09-29",
+            end="2024-12-28",
             value=90,
             form="10-Q",
             filed="2025-02-01",
         ),
         fact(
-            start="2025-01-01",
-            end="2025-03-31",
+            start="2024-12-29",
+            end="2025-03-29",
             value=95,
             form="10-Q",
             filed="2025-05-01",
         ),
         fact(
-            start="2025-04-01",
-            end="2025-06-30",
+            start="2025-03-30",
+            end="2025-06-28",
             value=100,
             form="10-Q",
             filed="2025-08-01",
@@ -101,14 +105,24 @@ def make_company_facts():
 
     net_income = [
         fact(
-            start=item["start"],
-            end=item["end"],
+            start=item[
+                "start"
+            ],
+            end=item[
+                "end"
+            ],
             value=(
-                item["val"]
+                item[
+                    "val"
+                ]
                 / 4
             ),
-            form=item["form"],
-            filed=item["filed"],
+            form=item[
+                "form"
+            ],
+            filed=item[
+                "filed"
+            ],
         )
         for item in revenue
     ]
@@ -155,7 +169,9 @@ def test_sec_resolves_cik(
         provider,
         "_ticker_map",
         lambda: {
-            "AAPL": "0000320193",
+            "AAPL": (
+                "0000320193"
+            ),
         },
     )
 
@@ -182,7 +198,9 @@ def test_sec_missing_cik_raises(
 
     with pytest.raises(
         ValueError,
-        match="SEC CIK not found",
+        match=(
+            "SEC CIK not found"
+        ),
     ):
         provider._resolve_cik(
             "INVALID"
@@ -216,7 +234,9 @@ def test_sec_builds_annual_and_quarterly_statements():
         ] == "quarterly"
     ]
 
-    assert len(annual) == 2
+    assert len(
+        annual
+    ) == 2
 
     assert len(
         quarterly
@@ -247,7 +267,7 @@ def test_sec_derives_fourth_quarter():
             == date(
                 2026,
                 9,
-                30,
+                26,
             )
         )
     )
@@ -283,8 +303,8 @@ def test_sec_ignores_ytd_quarter_fact():
         "USD"
     ].append(
         fact(
-            start="2025-10-01",
-            end="2026-03-31",
+            start="2025-09-28",
+            end="2026-03-28",
             value=205,
             form="10-Q",
             filed="2026-05-01",
@@ -310,7 +330,7 @@ def test_sec_ignores_ytd_quarter_fact():
             == date(
                 2026,
                 3,
-                31,
+                28,
             )
         )
     )
@@ -343,6 +363,177 @@ async def test_sec_fetch_requires_user_agent(
         ValueError,
         match="SEC_USER_AGENT",
     ):
-        await provider.get_income_statements(
-            "AAPL"
+        await (
+            provider
+            .get_income_statements(
+                "AAPL"
+            )
         )
+
+
+@pytest.mark.parametrize(
+    "source_date, expected",
+    [
+        (
+            date(
+                2026,
+                6,
+                27,
+            ),
+            date(
+                2026,
+                6,
+                30,
+            ),
+        ),
+        (
+            date(
+                2026,
+                3,
+                28,
+            ),
+            date(
+                2026,
+                3,
+                31,
+            ),
+        ),
+        (
+            date(
+                2025,
+                12,
+                27,
+            ),
+            date(
+                2025,
+                12,
+                31,
+            ),
+        ),
+        (
+            date(
+                2022,
+                9,
+                24,
+            ),
+            date(
+                2022,
+                9,
+                30,
+            ),
+        ),
+    ],
+)
+def test_canonical_period_end_date(
+    source_date,
+    expected,
+):
+    assert (
+        canonical_period_end_date(
+            source_date
+        )
+        == expected
+    )
+
+
+def test_period_date_can_match_previous_month_end():
+    assert (
+        canonical_period_end_date(
+            date(
+                2026,
+                7,
+                2,
+            )
+        )
+        == date(
+            2026,
+            6,
+            30,
+        )
+    )
+
+
+def test_period_date_outside_tolerance_is_preserved():
+    source_date = date(
+        2026,
+        6,
+        15,
+    )
+
+    assert (
+        canonical_period_end_date(
+            source_date
+        )
+        == source_date
+    )
+
+
+def test_period_dates_match_across_providers():
+    assert period_dates_match(
+        date(
+            2026,
+            6,
+            27,
+        ),
+        date(
+            2026,
+            6,
+            30,
+        ),
+    )
+
+
+def test_sec_normalizes_period_dates():
+    provider = (
+        SecFinancialProvider()
+    )
+
+    statements = [
+        {
+            "period_type": (
+                "quarterly"
+            ),
+            "period_end_date": date(
+                2026,
+                6,
+                27,
+            ),
+            "total_revenue": 100,
+        },
+        {
+            "period_type": (
+                "quarterly"
+            ),
+            "period_end_date": date(
+                2026,
+                3,
+                28,
+            ),
+            "total_revenue": 90,
+        },
+    ]
+
+    normalized = (
+        provider
+        ._normalize_period_dates(
+            statements
+        )
+    )
+
+    assert [
+        item[
+            "period_end_date"
+        ]
+        for item in normalized
+    ] == [
+        date(
+            2026,
+            6,
+            30,
+        ),
+        date(
+            2026,
+            3,
+            31,
+        ),
+    ]
