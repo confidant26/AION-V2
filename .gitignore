@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -32,3 +32,6 @@ htmlcov/
 
 # Docker
 *.pid
+# Local context exports
+aion_final_context.txt
+paket*_context.txt

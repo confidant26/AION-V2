@@ -1,9 +1,13 @@
-import asyncio
+﻿import asyncio
 import logging
 from collections.abc import Callable
+from time import perf_counter
 from typing import TypeVar
 
 from app.core.config import settings
+from app.providers.telemetry import (
+    record_provider_event,
+)
 
 
 T = TypeVar("T")
@@ -69,20 +73,59 @@ async def run_sync_with_retry(
         1,
         attempts + 1,
     ):
+        started_at = perf_counter()
+
         try:
-            return await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 asyncio.to_thread(
                     operation
                 ),
                 timeout=timeout,
             )
 
-        except ValueError:
-            # Missing/invalid provider data is not
-            # considered a transient network failure.
+            record_provider_event(
+                event="provider_attempt",
+                provider=provider_name,
+                operation=operation_name,
+                status="success",
+                attempt=attempt,
+                duration_ms=(
+                    perf_counter()
+                    - started_at
+                ) * 1000,
+            )
+
+            return result
+
+        except ValueError as exc:
+            record_provider_event(
+                event="provider_attempt",
+                provider=provider_name,
+                operation=operation_name,
+                status="data_error",
+                attempt=attempt,
+                duration_ms=(
+                    perf_counter()
+                    - started_at
+                ) * 1000,
+                error=str(exc),
+            )
             raise
 
         except TimeoutError as exc:
+            record_provider_event(
+                event="provider_attempt",
+                provider=provider_name,
+                operation=operation_name,
+                status="timeout",
+                attempt=attempt,
+                duration_ms=(
+                    perf_counter()
+                    - started_at
+                ) * 1000,
+                error=str(exc),
+            )
+
             if attempt >= attempts:
                 raise ProviderTimeoutError(
                     f"{provider_name} timed out while "
@@ -99,10 +142,35 @@ async def run_sync_with_retry(
                 attempts,
             )
 
-        except ProviderError:
+        except ProviderError as exc:
+            record_provider_event(
+                event="provider_attempt",
+                provider=provider_name,
+                operation=operation_name,
+                status="provider_error",
+                attempt=attempt,
+                duration_ms=(
+                    perf_counter()
+                    - started_at
+                ) * 1000,
+                error=str(exc),
+            )
             raise
 
         except Exception as exc:
+            record_provider_event(
+                event="provider_attempt",
+                provider=provider_name,
+                operation=operation_name,
+                status="error",
+                attempt=attempt,
+                duration_ms=(
+                    perf_counter()
+                    - started_at
+                ) * 1000,
+                error=str(exc),
+            )
+
             if attempt >= attempts:
                 raise ProviderUnavailableError(
                     f"{provider_name} failed while "

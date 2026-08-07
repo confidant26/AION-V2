@@ -1,9 +1,13 @@
-from collections.abc import Awaitable, Callable
+﻿from collections.abc import Awaitable, Callable
+from time import perf_counter
 from typing import TypeVar
 
 from app.providers.resilience import (
     ProviderError,
     ProviderUnavailableError,
+)
+from app.providers.telemetry import (
+    record_provider_event,
 )
 
 
@@ -28,17 +32,34 @@ async def execute_with_fallback(
     last_value_error: ValueError | None = None
     provider_error_seen = False
 
-    for provider in providers:
+    for provider_index, provider in enumerate(
+        providers
+    ):
         provider_name = getattr(
             provider,
             "provider_name",
             provider.__class__.__name__,
         )
+        started_at = perf_counter()
 
         try:
-            return await operation(
+            result = await operation(
                 provider
             )
+
+            record_provider_event(
+                event="fallback_provider",
+                provider=str(provider_name),
+                operation=operation_name,
+                status="success",
+                provider_index=provider_index,
+                duration_ms=(
+                    perf_counter()
+                    - started_at
+                ) * 1000,
+            )
+
+            return result
 
         except ValueError as exc:
             last_value_error = exc
@@ -47,11 +68,37 @@ async def execute_with_fallback(
                 f"{provider_name}: {exc}"
             )
 
+            record_provider_event(
+                event="fallback_provider",
+                provider=str(provider_name),
+                operation=operation_name,
+                status="data_error",
+                provider_index=provider_index,
+                duration_ms=(
+                    perf_counter()
+                    - started_at
+                ) * 1000,
+                error=str(exc),
+            )
+
         except ProviderError as exc:
             provider_error_seen = True
 
             errors.append(
                 f"{provider_name}: {exc}"
+            )
+
+            record_provider_event(
+                event="fallback_provider",
+                provider=str(provider_name),
+                operation=operation_name,
+                status="provider_error",
+                provider_index=provider_index,
+                duration_ms=(
+                    perf_counter()
+                    - started_at
+                ) * 1000,
+                error=str(exc),
             )
 
     if (

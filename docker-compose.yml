@@ -1,30 +1,32 @@
-version: "3.9"
-
-services:
+﻿services:
   postgres:
     image: postgres:17
     container_name: aion_postgres
-
     environment:
       POSTGRES_USER: aion
       POSTGRES_PASSWORD: aion_password
       POSTGRES_DB: aion_db
-
     ports:
       - "5432:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aion -d aion_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: aion_redis
-
     ports:
       - "6379:6379"
-
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:

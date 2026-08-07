@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from app.services.ttm_financials_service import TTMFinancialsService
 from app.services.ttm_valuation_metrics_service import (
     TTMValuationMetricsService,
 )
+from app.providers.telemetry import get_provider_trace_summary
 
 
 router = APIRouter(
@@ -381,6 +382,10 @@ async def collect_financials(
             "warnings": warnings,
         },
     }
+
+    response["provider_observability"] = (
+        get_provider_trace_summary()
+    )
 
     if include_analysis:
         response["analysis"] = (

@@ -1,4 +1,4 @@
-from app.models.market_price import MarketPrice
+﻿from app.models.market_price import MarketPrice
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.market_price_repository import MarketPriceRepository
 from app.services.market_data_service import MarketDataService
@@ -9,7 +9,7 @@ class MarketIngestionService:
         self,
         asset_repository: AssetRepository,
         market_price_repository: MarketPriceRepository,
-        provider_name: str = "yahoo",
+        provider_name: str | None = None,
     ) -> None:
         self.asset_repository = asset_repository
         self.market_price_repository = market_price_repository

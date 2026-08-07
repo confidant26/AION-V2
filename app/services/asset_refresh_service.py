@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,7 @@ from app.services.ttm_financials_service import TTMFinancialsService
 from app.services.ttm_valuation_metrics_service import (
     TTMValuationMetricsService,
 )
+from app.providers.telemetry import get_provider_trace_summary
 
 
 class AssetRefreshService:
@@ -319,5 +320,9 @@ class AssetRefreshService:
                     )
                 ),
             }
+
+        response["provider_observability"] = (
+            get_provider_trace_summary()
+        )
 
         return response

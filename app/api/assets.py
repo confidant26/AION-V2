@@ -1,4 +1,4 @@
-from fastapi import (
+﻿from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
@@ -16,12 +16,14 @@ from app.schemas.asset_batch_refresh import (
     AssetBatchRefreshRequest,
     AssetBatchRefreshResponse,
 )
+from app.schemas.freshness import AssetFreshnessResponse
 from app.services.asset_batch_refresh_service import (
     AssetBatchRefreshService,
 )
 from app.services.asset_refresh_service import (
     AssetRefreshService,
 )
+from app.services.freshness_service import AssetFreshnessService
 from app.services.asset_service import (
     AssetAlreadyExistsError,
     AssetNotFoundError,
@@ -114,6 +116,32 @@ async def refresh_assets_batch(
             request.concurrency
         ),
     )
+
+
+@router.get(
+    "/freshness/{symbol}",
+    response_model=AssetFreshnessResponse,
+)
+def get_asset_freshness(
+    symbol: str,
+    db: Session = Depends(get_db),
+) -> AssetFreshnessResponse:
+    service = AssetFreshnessService(
+        db=db,
+    )
+
+    try:
+        return service.get_freshness(
+            symbol
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=str(exc),
+        ) from exc
 
 
 @router.post(

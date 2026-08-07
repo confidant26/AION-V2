@@ -1,9 +1,9 @@
-from app.providers.market.factory import MarketProviderFactory
+﻿from app.providers.market.factory import MarketProviderFactory
 from app.schemas.market_price import MarketPriceCreate
 
 
 class MarketDataService:
-    def __init__(self, provider_name: str = "yahoo") -> None:
+    def __init__(self, provider_name: str | None = None) -> None:
         self.provider = MarketProviderFactory.create(provider_name)
 
     async def get_latest_price(self, symbol: str) -> MarketPriceCreate:
