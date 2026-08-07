@@ -27,6 +27,7 @@ from app.api.ttm_valuation_metrics import (
 )
 from app.api.valuation_metrics import router as valuation_metrics_router
 from app.api.valuation_score import router as valuation_score_router
+from app.api.watchlist import router as watchlist_router
 from app.core.config import settings
 from app.db.session import engine
 
@@ -55,6 +56,7 @@ app.include_router(ttm_valuation_metrics_router)
 app.include_router(valuation_score_router)
 app.include_router(composite_score_router)
 app.include_router(ranking_router)
+app.include_router(watchlist_router)
 
 
 @app.get("/")
