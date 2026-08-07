@@ -12,6 +12,9 @@ from app.models.cash_flow_statement import CashFlowStatement
 from app.models.company_profile import CompanyProfile
 from app.models.income_statement import IncomeStatement
 from app.models.market_price import MarketPrice
+from app.models.portfolio import Portfolio, PortfolioPosition
+from app.models.user import User
+from app.models.watchlist_item import WatchlistItem
 
 
 @pytest.fixture

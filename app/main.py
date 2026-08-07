@@ -1,9 +1,10 @@
-﻿from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from app.api.assets import router as assets_router
+from app.api.auth import router as auth_router
 from app.api.balance_sheet import router as balance_sheet_router
 from app.api.cash_flow_statement import (
     router as cash_flow_statement_router,
@@ -22,6 +23,7 @@ from app.api.income_statement import (
 )
 from app.api.market import router as market_router
 from app.api.quality_score import router as quality_score_router
+from app.api.portfolio import router as portfolio_router
 from app.api.ranking import router as ranking_router
 from app.api.system import router as system_router
 from app.api.ttm_financials import router as ttm_financials_router
@@ -67,6 +69,9 @@ def create_app() -> FastAPI:
 
     application.include_router(
         health_router
+    )
+    application.include_router(
+        auth_router
     )
     application.include_router(
         assets_router
@@ -121,6 +126,9 @@ def create_app() -> FastAPI:
     )
     application.include_router(
         watchlist_router
+    )
+    application.include_router(
+        portfolio_router
     )
     application.include_router(
         system_router

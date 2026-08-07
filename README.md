@@ -1,4 +1,4 @@
-﻿# AION V2
+# AION V2
 
 AION V2 is a FastAPI financial-analysis backend that collects market and company data, stores normalized financial statements, computes TTM metrics and scores, and exposes ranking, screener, watchlist, and refresh workflows.
 
@@ -165,3 +165,15 @@ GET /health/readiness
 ```
 
 `/health/readiness` returns HTTP 503 when PostgreSQL or Redis is unavailable.
+
+## Product v1
+
+Authenticated product endpoints:
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+- `/watchlist` is user-scoped and requires a Bearer token.
+- `/portfolios` provides user-owned portfolios and positions with latest-price valuation when market data exists.
+
+Before production deployment, set a long random `AUTH_SECRET_KEY` and run `alembic upgrade head`.

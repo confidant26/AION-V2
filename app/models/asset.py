@@ -124,3 +124,14 @@ class Asset(Base):
         back_populates="asset",
         cascade="all, delete-orphan",
     )
+
+
+    watchlist_items = relationship(
+        "WatchlistItem",
+        back_populates="asset",
+    )
+
+    portfolio_positions = relationship(
+        "PortfolioPosition",
+        back_populates="asset",
+    )

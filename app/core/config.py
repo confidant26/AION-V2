@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import (
@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     financial_provider_chain: str = "sec,yahoo"
 
     sec_user_agent: str = ""
+
+    auth_secret_key: str = "development-only-change-me-use-at-least-32-bytes"
+    auth_algorithm: str = "HS256"
+    auth_issuer: str = "aion-v2"
+    auth_access_token_minutes: int = Field(default=60, ge=5, le=10080)
 
     model_config = SettingsConfigDict(
         env_file=".env",
